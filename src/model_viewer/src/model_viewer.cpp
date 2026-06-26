@@ -198,6 +198,58 @@ static MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
     return mesh;
 }
 
+static std::string read_text_file(const std::filesystem::path &path) {
+    if (!std::filesystem::exists(path)) {
+        throw std::runtime_error("File does not exist.");
+    }
+
+    auto &&stream = std::ifstream(path, std::ios::binary);
+
+    stream.seekg(0, std::ios::end);
+    const size_t length = stream.tellg();
+    stream.seekg(0, std::ios::beg);
+
+    auto &&result = std::string(length, '\0');
+    stream.read(result.data(), length);
+
+    return result;
+}
+
+static std::vector<uint32_t> compile_shader(const std::filesystem::path &path, const shaderc_shader_kind kind) {
+    const std::string source{read_text_file(path)};
+
+    const shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
+
+    const auto result{compiler.CompileGlslToSpv(source, kind, path.string().c_str(), options)};
+
+    if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
+        throw std::runtime_error(result.GetErrorMessage());
+    }
+
+    return {result.cbegin(), result.cend()};
+}
+
+static VkShaderModule create_shader_module(const std::vector<uint32_t> &spirv) {
+    const VkShaderModuleCreateInfo shader_module_create_info{
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = spirv.size() * sizeof(uint32_t),
+        .pCode = spirv.data()
+    };
+
+    VkShaderModule shader_module{VK_NULL_HANDLE};
+
+    // ReSharper disable once CppTooWideScopeInitStatement
+    const auto result = vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create shader module.");
+    }
+
+    return shader_module;
+}
+
 static void check(const VkResult result) {
     if (result != VK_SUCCESS) {
         printf("Vulkan call returned an error: %d\n", result);
@@ -661,6 +713,116 @@ int main(int argc, char *argv[]) {
     std::printf("Descriptor sets created.\n");
 
     // load shaders
+    auto vertex_spirv{compile_shader("vert.glsl", shaderc_vertex_shader)};
+    auto frag_spirv{compile_shader("frag.glsl", shaderc_fragment_shader)};
+
+    [[maybe_unused]] VkShaderModule vertex_shader_module{create_shader_module(vertex_spirv)};
+    [[maybe_unused]] VkShaderModule fragment_shader_module{create_shader_module(frag_spirv)};
+    std::printf("Shader modules created.\n");
+
+    // pipeline
+    VkPushConstantRange push_constant_range{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .size = sizeof(VkDeviceAddress)
+    };
+    VkPipelineLayoutCreateInfo layout_create_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptor_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_constant_range
+    };
+    check(vkCreatePipelineLayout(device, &layout_create_info, nullptr, &pipeline_layout));
+    VkPipelineShaderStageCreateInfo shader_stages[]{
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = vertex_shader_module,
+            .pName = "main",
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = fragment_shader_module,
+            .pName = "main",
+        }
+    };
+    VkVertexInputBindingDescription vertex_binding{
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
+    std::vector<VkVertexInputAttributeDescription> vertex_attributes{
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT},
+        {.location = 1, .binding = 1, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
+        {.location = 2, .binding = 2, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+    };
+    VkPipelineVertexInputStateCreateInfo vertex_input_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &vertex_binding,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_attributes.size()),
+        .pVertexAttributeDescriptions = vertex_attributes.data()
+    };
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+    };
+    std::vector<VkDynamicState> dynamic_states{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dynamic_states.data()
+    };
+    VkPipelineViewportStateCreateInfo viewport_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+    VkPipelineRasterizationStateCreateInfo rasterization_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .lineWidth = 1.0f
+    };
+    VkPipelineMultisampleStateCreateInfo multisample_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+    };
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+    };
+    VkPipelineColorBlendAttachmentState blend_attachment{.colorWriteMask = 0xF};
+    VkPipelineColorBlendStateCreateInfo color_blend_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &blend_attachment
+    };
+    VkPipelineRenderingCreateInfo rendering_create_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &image_format,
+        .depthAttachmentFormat = depth_format
+    };
+    VkGraphicsPipelineCreateInfo pipeline_create_info{
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &rendering_create_info,
+        .stageCount = 2,
+        .pStages = shader_stages,
+        .pVertexInputState = &vertex_input_state,
+        .pInputAssemblyState = &input_assembly_state,
+        .pViewportState = &viewport_state,
+        .pRasterizationState = &rasterization_state,
+        .pMultisampleState = &multisample_state,
+        .pDepthStencilState = &depth_stencil_state,
+        .pColorBlendState = &color_blend_state,
+        .pDynamicState = &dynamic_state,
+        .layout = pipeline_layout
+    };
+    check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &pipeline));
+    std::printf("Pipeline created.\n");
+
 
     return EXIT_SUCCESS;
 }
