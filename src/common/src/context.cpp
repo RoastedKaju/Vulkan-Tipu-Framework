@@ -18,17 +18,20 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBit
     return VK_FALSE;
 }
 
-Context::Context() {
-    Context(true);
-}
-
-Context::Context(const bool enable_validation_layers) : enable_validation_layers_(enable_validation_layers) {
+Context::Context(const Config &config) : config_(config) {
     check(SDL_Init(SDL_INIT_VIDEO));
     check(SDL_Vulkan_LoadLibrary(nullptr));
     volkInitialize();
 }
 
 Context::~Context() {
+}
+
+bool Context::initialize() {
+    create_instance(config_.app_name_.c_str());
+    setup_device();
+
+    return true;
 }
 
 bool Context::create_instance(const char *app_name) {
@@ -41,7 +44,7 @@ bool Context::create_instance(const char *app_name) {
     uint32_t instance_extension_count{0};
     char const *const *sdl_extensions{SDL_Vulkan_GetInstanceExtensions(&instance_extension_count)};
     std::vector<const char *> instance_extensions(sdl_extensions, sdl_extensions + instance_extension_count);
-    if (enable_validation_layers_) {
+    if (config_.enable_validation_) {
         instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         ++instance_extension_count;
     }
@@ -61,8 +64,8 @@ bool Context::create_instance(const char *app_name) {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = &debug_create_info,
         .pApplicationInfo = &app_info,
-        .enabledLayerCount = enable_validation_layers_ ? static_cast<uint32_t>(validation_layers_.size()) : 0,
-        .ppEnabledLayerNames = enable_validation_layers_ ? validation_layers_.data() : nullptr,
+        .enabledLayerCount = config_.enable_validation_ ? static_cast<uint32_t>(validation_layers_.size()) : 0,
+        .ppEnabledLayerNames = config_.enable_validation_ ? validation_layers_.data() : nullptr,
         .enabledExtensionCount = static_cast<uint32_t>(instance_extensions.size()),
         .ppEnabledExtensionNames = instance_extensions.data()
     };
@@ -70,7 +73,7 @@ bool Context::create_instance(const char *app_name) {
     check(vkCreateInstance(&instance_create_info, nullptr, &instance_));
     volkLoadInstance(instance_);
 
-    if (enable_validation_layers_) {
+    if (config_.enable_validation_) {
         check(vkCreateDebugUtilsMessengerEXT(instance_, &debug_create_info, nullptr, &debug_messenger_));
     }
 
@@ -97,20 +100,19 @@ bool Context::setup_device(const uint32_t device_index) {
     vkGetPhysicalDeviceQueueFamilyProperties(devices[device_index], &queue_family_count, nullptr);
     std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(devices[device_index], &queue_family_count, queue_families.data());
-    uint32_t queue_family_index{0};
     for (auto i = 0; i < queue_families.size(); ++i) {
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            queue_family_index = static_cast<uint32_t>(i);
+            queue_family_index_ = static_cast<uint32_t>(i);
             break;
         }
     }
-    check(SDL_Vulkan_GetPresentationSupport(instance_, devices[device_index], queue_family_index));
+    check(SDL_Vulkan_GetPresentationSupport(instance_, devices[device_index], queue_family_index_));
 
     // logical device
     constexpr float priorities = 1.0f;
     VkDeviceQueueCreateInfo queue_create_info{
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = queue_family_index,
+        .queueFamilyIndex = queue_family_index_,
         .queueCount = 1,
         .pQueuePriorities = &priorities,
     };
@@ -147,7 +149,7 @@ bool Context::setup_device(const uint32_t device_index) {
     };
 
     check(vkCreateDevice(devices[device_index], &device_create_info, nullptr, &device_));
-    vkGetDeviceQueue(device_, queue_family_index, 0, &queue_);
+    vkGetDeviceQueue(device_, queue_family_index_, 0, &queue_);
 
     // VMA
     VmaVulkanFunctions vk_functions{
@@ -167,16 +169,53 @@ bool Context::setup_device(const uint32_t device_index) {
     return true;
 }
 
-bool Context::create_window(const char *title, const uint32_t width, const uint32_t height) {
+SDL_Window *Context::create_window(const char *title, const uint32_t width, const uint32_t height) {
+    // create window and surface
     SDL_Window *window = SDL_CreateWindow(title, width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     assert(window && "Failed to create window");
     check(SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_));
     check(SDL_GetWindowSize(window, &window_size_.x, &window_size_.y));
 
-    return true;
+    // initialize swap chain
+    create_swap_chain();
+    create_frame_resources();
+
+    return window;
 }
 
 void Context::create_swap_chain() {
     swap_chain_.init_swap_chain(this);
     swap_chain_.setup_depth_attachment(this);
+}
+
+void Context::create_frame_resources() {
+    // setup sync objects
+    constexpr VkSemaphoreCreateInfo semaphore_create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    constexpr VkFenceCreateInfo fence_create_info{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+    for (auto i = 0; i < frame_data_.max_frames_in_flight_; ++i) {
+        check(vkCreateFence(device_, &fence_create_info, nullptr, &frame_data_.fences_[i]));
+        check(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &frame_data_.image_acquired_semaphores_[i]));
+    }
+    frame_data_.render_complete_semaphores_.resize(swap_chain_.get_images().size());
+    for (auto &semaphore: frame_data_.render_complete_semaphores_) {
+        check(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &semaphore));
+    }
+
+    // create command pool
+    const VkCommandPoolCreateInfo command_pool_create_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queue_family_index_
+    };
+    check(vkCreateCommandPool(device_, &command_pool_create_info, nullptr, &command_pool_));
+    const VkCommandBufferAllocateInfo command_buffer_allocate_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = command_pool_,
+        .commandBufferCount = frame_data_.max_frames_in_flight_
+    };
+    check(vkAllocateCommandBuffers(device_, &command_buffer_allocate_info, frame_data_.command_buffers_.data()));
+    std::printf("Command pool and buffers created.\n");
 }

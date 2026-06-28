@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 // #include <vector>
 // #include <array>
@@ -23,16 +24,50 @@
 // #include <shaderc/shaderc.hpp>
 
 #include "context.h"
+#include "mesh.h"
+#include "buffer.h"
+
+struct ShaderData {
+    glm::mat4 projection;
+    glm::mat4 view;
+    glm::mat4 model;
+};
 
 int main(int argc, char *argv[]) {
-    try {
-        Context context{true};
-        context.create_instance("Model Viewer");
-        context.setup_device();
-        context.create_window("Model Viewer", 1280u, 720u);
-        context.create_swap_chain();
-    } catch (std::exception &exception) {
-        std::printf("%s\n", exception.what());
+    Config config{
+        .app_name_ = "Model Viewer",
+        .present_mode_ = VK_PRESENT_MODE_FIFO_KHR,
+        .enable_validation_ = true
+    };
+
+    const auto ctx = std::make_unique<Context>(config);
+    ctx->initialize();
+    SDL_Window *window = ctx->create_window("Model Viewer", 1280u, 720u);
+
+    // load model
+    Mesh tank_mesh{};
+    tank_mesh.load_mesh(("assets/models/tank.glb"));
+
+    // buffers for model
+    const VkDeviceSize v_buf_size = sizeof(Vertex) * tank_mesh.data().vertices.size();
+    const VkDeviceSize i_buf_size = sizeof(uint32_t) * tank_mesh.data().indices.size();
+
+    // vertex buffer
+    Buffer vertex_buffer{};
+    vertex_buffer.create_buffer(ctx.get(), v_buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    vertex_buffer.copy_data(tank_mesh.data().vertices.data());
+
+    // index buffer
+    Buffer index_buffer{};
+    index_buffer.create_buffer(ctx.get(), i_buf_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    index_buffer.copy_data(tank_mesh.data().indices.data());
+
+    // shader data and its buffers
+    [[maybe_unused]] ShaderData shader_data{};
+    std::vector<Buffer> shader_data_buffers(ctx->get_max_frame_count());
+    // create buffers per frame in flight
+    for (auto i = 0; i < ctx->get_max_frame_count(); i++) {
+        shader_data_buffers[i].create_buffer(ctx.get(), sizeof(ShaderData), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
     }
 
     return EXIT_SUCCESS;

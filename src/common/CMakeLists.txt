@@ -1,13 +1,11 @@
 add_library(Common SHARED)
 
-target_sources(Common PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/context.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/context.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/swap_chain.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/swap_chain.h"
-)
+file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE HED_FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
 
-target_include_directories(Common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_sources(Common PRIVATE ${SRC_FILES} ${HED_FILES})
+
+target_include_directories(Common PUBLIC "include")
 
 target_link_libraries(Common
         PUBLIC Vulkan::Vulkan

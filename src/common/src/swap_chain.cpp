@@ -32,7 +32,7 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = VK_PRESENT_MODE_FIFO_KHR
+        .presentMode = context->config_.present_mode_
     };
     check(vkCreateSwapchainKHR(device, &swap_chain_create_info, nullptr, &swap_chain_));
     uint32_t image_count{0};

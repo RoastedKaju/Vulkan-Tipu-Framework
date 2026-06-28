@@ -14,6 +14,8 @@ public:
 
     void setup_depth_attachment(const Context *context);
 
+    std::vector<VkImage> get_images() { return swap_chain_images_; };
+
 private:
     bool is_swap_chain_dirty_{false};
     VkSwapchainKHR swap_chain_{VK_NULL_HANDLE};
