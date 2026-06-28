@@ -1,5 +1,6 @@
 #include "context.h"
 #include "utils.h"
+
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #define VMA_IMPLEMENTATION
@@ -30,6 +31,7 @@ Context::~Context() {
 bool Context::initialize() {
     create_instance(config_.app_name_.c_str());
     setup_device();
+    texture_descriptor_set_.create(device_, config_.max_texture_count_);
 
     return true;
 }
@@ -121,6 +123,7 @@ bool Context::setup_device(const uint32_t device_index) {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .descriptorIndexing = true,
         .shaderSampledImageArrayNonUniformIndexing = true,
+        .descriptorBindingSampledImageUpdateAfterBind = true,
         .descriptorBindingPartiallyBound = true,
         .descriptorBindingVariableDescriptorCount = true,
         .runtimeDescriptorArray = true,

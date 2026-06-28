@@ -12,11 +12,13 @@
 
 #include "frame.h"
 #include "swap_chain.h"
+#include "texture_descriptor_set.h"
 
 struct Config {
     std::string app_name_ = "default";
     VkPresentModeKHR present_mode_ = VK_PRESENT_MODE_FIFO_KHR;
     bool enable_validation_ = true;
+    uint32_t max_texture_count_ = 128;
 };
 
 class Context {
@@ -72,9 +74,13 @@ private:
     // pools
     VkCommandPool command_pool_{VK_NULL_HANDLE};
 
-    // Frame data
+    // frame data
     FrameData frame_data_;
+
+    // texture descriptor set
+    TextureDescriptorSet texture_descriptor_set_;
 
     friend class SwapChain;
     friend class Buffer;
+    friend class Shader;
 };
