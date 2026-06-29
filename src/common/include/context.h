@@ -13,7 +13,6 @@
 
 #include "frame.h"
 #include "swap_chain.h"
-#include "texture_descriptor_set.h"
 
 struct Config {
     std::string app_name_ = "default";
@@ -26,11 +25,29 @@ class Context {
 public:
     explicit Context(const Config &config);
 
+    Context(const Context &) = delete;
+
+    Context(Context &&) = delete;
+
+    Context &operator=(const Context &) = delete;
+
+    Context &operator=(Context &&) = delete;
+
     ~Context();
 
     bool initialize();
 
     SDL_Window *create_window(const char *title, uint32_t width, uint32_t height);
+
+    void sync();
+
+    void draw(VkPipelineLayout pipeline_layout,
+              VkPipeline pipeline,
+              VkDescriptorSet descriptor_set,
+              VkBuffer &vert_buffer,
+              VkBuffer &index_buffer,
+              VkDeviceAddress push_const_buf_ad,
+              uint32_t index_count);
 
     /**
      *
@@ -82,9 +99,6 @@ private:
 
     // frame data
     FrameData frame_data_;
-
-    // texture descriptor set
-    TextureDescriptorSet texture_descriptor_set_;
 
     friend class SwapChain;
     friend class Buffer;

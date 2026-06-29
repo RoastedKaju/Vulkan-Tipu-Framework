@@ -12,7 +12,7 @@ public:
 
     VkDescriptorSetLayout layout() const { return descriptor_set_layout_; }
 
-private:
+public:
     uint32_t max_texture_count_{64};
     VkDescriptorPool descriptor_pool_{VK_NULL_HANDLE};
     VkDescriptorSetLayout descriptor_set_layout_{VK_NULL_HANDLE};

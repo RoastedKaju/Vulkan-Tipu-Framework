@@ -11,7 +11,17 @@ class SwapChain {
 public:
     SwapChain() = default;
 
-    void init_swap_chain(const Context *context, VkFormat image_format = VK_FORMAT_B8G8R8A8_SRGB);
+    SwapChain(const SwapChain &) = delete;
+
+    SwapChain(SwapChain &&) = delete;
+
+    SwapChain &operator=(const SwapChain &) = delete;
+
+    SwapChain &operator=(SwapChain &&) = delete;
+
+    ~SwapChain() = default;
+
+    void init_swap_chain(const Context *context, VkFormat image_format = VK_FORMAT_R8G8B8A8_SRGB);
 
     void setup_depth_attachment(const Context *context);
 
@@ -19,7 +29,7 @@ public:
     VkFormat get_format() const { return swap_chain_format_; };
     VkFormat get_depth_format() const { return depth_format_; };
 
-private:
+public:
     bool is_swap_chain_dirty_{false};
     VkSwapchainKHR swap_chain_{VK_NULL_HANDLE};
     VkFormat swap_chain_format_{VK_FORMAT_R8G8B8A8_SRGB};

@@ -17,7 +17,7 @@ target_link_libraries(Common
 )
 
 target_compile_definitions(Common PUBLIC VK_NO_PROTOTYPES)
-target_compile_definitions(Common PRIVATE GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_compile_definitions(Common PUBLIC GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 # Shader-C linking
 target_include_directories(Common PUBLIC "${CMAKE_SOURCE_DIR}/extern/shaderc")

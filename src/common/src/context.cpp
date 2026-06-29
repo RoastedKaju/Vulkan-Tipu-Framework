@@ -33,7 +33,6 @@ Context::~Context() {
 bool Context::initialize() {
     create_instance(config_.app_name_.c_str());
     setup_device();
-    texture_descriptor_set_.create(device_, config_.max_texture_count_);
 
     return true;
 }
@@ -154,6 +153,8 @@ bool Context::setup_device(const uint32_t device_index) {
     };
 
     check(vkCreateDevice(devices[device_index], &device_create_info, nullptr, &device_));
+    volkLoadDevice(device_);
+
     vkGetDeviceQueue(device_, queue_family_index_, 0, &queue_);
 
     // VMA
@@ -186,6 +187,175 @@ SDL_Window *Context::create_window(const char *title, const uint32_t width, cons
     create_frame_resources();
 
     return window;
+}
+
+void Context::sync() {
+    // sync
+    check(vkWaitForFences(device_, 1, &frame_data_.fences_[frame_data_.frame_index_], true, UINT64_MAX));
+    check(vkResetFences(device_, 1, &frame_data_.fences_[frame_data_.frame_index_]));
+    const VkResult result = vkAcquireNextImageKHR(device_,
+                                                  swap_chain_.swap_chain_,
+                                                  UINT64_MAX,
+                                                  frame_data_.image_acquired_semaphores_[frame_data_.frame_index_],
+                                                  VK_NULL_HANDLE, &frame_data_.image_index_);
+    check_swap_chain(result, swap_chain_.is_swap_chain_dirty_);
+}
+
+void Context::draw(VkPipelineLayout pipeline_layout,
+                   VkPipeline pipeline,
+                   VkDescriptorSet descriptor_set,
+                   VkBuffer &vert_buffer,
+                   VkBuffer &index_buffer,
+                   VkDeviceAddress push_const_buf_ad,
+                   uint32_t index_count) {
+    // record commands
+    const uint32_t frame_index = frame_data_.frame_index_;
+    const uint32_t image_index = frame_data_.image_index_;
+
+    auto cmd = frame_data_.command_buffers_[frame_index];
+    check(vkResetCommandBuffer(cmd, 0));
+    VkCommandBufferBeginInfo cmd_begin_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    check(vkBeginCommandBuffer(cmd, &cmd_begin_info));
+    // barriers
+    std::array<VkImageMemoryBarrier2, 2> output_barriers{
+        VkImageMemoryBarrier2{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = 0,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+            .image = swap_chain_.swap_chain_images_[image_index],
+            .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+        },
+        VkImageMemoryBarrier2{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+            .image = swap_chain_.depth_image_,
+            .subresourceRange{
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                .levelCount = 1,
+                .layerCount = 1
+            }
+        }
+    };
+    VkDependencyInfo barrier_dep_info{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 2,
+        .pImageMemoryBarriers = output_barriers.data()
+    };
+    vkCmdPipelineBarrier2(cmd, &barrier_dep_info);
+    // rendering attachments
+    VkRenderingAttachmentInfo color_attachment_info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = swap_chain_.swap_chain_image_views_[image_index],
+        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}
+    };
+    VkRenderingAttachmentInfo depth_attachment_info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = swap_chain_.depth_image_view_,
+        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .clearValue = {.depthStencil = {1.0f, 0}}
+    };
+    VkRenderingInfo rendering_info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea{
+            .extent{.width = static_cast<uint32_t>(window_size_.x), .height = static_cast<uint32_t>(window_size_.y)}
+        },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_attachment_info,
+        .pDepthAttachment = &depth_attachment_info,
+    };
+
+
+    // dynamic rendering
+    vkCmdBeginRendering(cmd, &rendering_info);
+    VkViewport viewport{
+        .width = static_cast<float>(window_size_.x),
+        .height = static_cast<float>(window_size_.y),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    VkRect2D scissor{
+        .extent{.width = static_cast<uint32_t>(window_size_.x), .height = static_cast<uint32_t>(window_size_.y)}
+    };
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0,
+                            nullptr);
+    VkDeviceSize vertex_offset{0};
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vert_buffer, &vertex_offset);
+    vkCmdBindIndexBuffer(cmd, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdPushConstants(cmd,
+                       pipeline_layout,
+                       VK_SHADER_STAGE_VERTEX_BIT,
+                       0,
+                       sizeof(VkDeviceAddress),
+                       &push_const_buf_ad);
+
+    // draw
+    vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 0);
+    vkCmdEndRendering(cmd);
+
+    // present
+    VkImageMemoryBarrier2 barrier_present{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = 0,
+        .oldLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .image = swap_chain_.swap_chain_images_[image_index],
+        .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+    };
+    VkDependencyInfo barrier_present_dependency_info{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &barrier_present
+    };
+    vkCmdPipelineBarrier2(cmd, &barrier_present_dependency_info);
+    check(vkEndCommandBuffer(cmd));
+
+    // submit
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit_info{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &frame_data_.image_acquired_semaphores_[frame_index],
+        .pWaitDstStageMask = &wait_stage,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &frame_data_.render_complete_semaphores_[image_index]
+    };
+    check(vkQueueSubmit(queue_, 1, &submit_info, frame_data_.fences_[frame_index]));
+    frame_data_.frame_index_ = (frame_index + 1) % frame_data_.max_frames_in_flight_;
+    VkPresentInfoKHR present_info{
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &frame_data_.render_complete_semaphores_[image_index],
+        .swapchainCount = 1,
+        .pSwapchains = &swap_chain_.swap_chain_,
+        .pImageIndices = &image_index
+    };
+    vkQueuePresentKHR(queue_, &present_info);
 }
 
 void Context::create_swap_chain() {

@@ -19,7 +19,7 @@ public:
 
     VkDeviceAddress device_address(const Context *context) const;
 
-private:
+public:
     VkBuffer buffer_{VK_NULL_HANDLE};
     VmaAllocation allocation_{VK_NULL_HANDLE};
     VmaAllocationInfo allocation_info_{};
@@ -42,7 +42,7 @@ public:
 
     VkDeviceAddress address(const uint32_t frame) const { return buffers_[frame].device_address(ctx_); }
 
-private:
+public:
     const Context *ctx_;
     std::vector<Buffer> buffers_;
 };
