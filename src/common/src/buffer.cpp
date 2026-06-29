@@ -28,7 +28,7 @@ void Buffer::create_buffer(const Context *context, const VkDeviceSize size, cons
         &allocation_info_));
 }
 
-void Buffer::copy_data(const void *src) const {
+void Buffer::update(const void *src) const {
     memcpy(allocation_info_.pMappedData, src, size_);
 }
 

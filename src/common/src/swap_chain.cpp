@@ -61,22 +61,21 @@ void SwapChain::setup_depth_attachment(const Context *context) {
     const auto window_size = context->window_size_;
 
     std::vector<VkFormat> depth_format_list{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
-    VkFormat depth_format{VK_FORMAT_D32_SFLOAT};
     // ReSharper disable once CppLocalVariableMayBeConst
     for (VkFormat &format: depth_format_list) {
         VkFormatProperties2 format_properties{.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
         vkGetPhysicalDeviceFormatProperties2(physical_device, format, &format_properties);
         if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-            depth_format = format;
+            depth_format_ = format;
             break;
         }
     }
 
-    assert(depth_format != VK_FORMAT_UNDEFINED && "Depth format is undefined.\n");
+    assert(depth_format_ != VK_FORMAT_UNDEFINED && "Depth format is undefined.\n");
     const VkImageCreateInfo depth_image_create_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = depth_format,
+        .format = depth_format_,
         .extent{
             .width = static_cast<uint32_t>(window_size.x), .height = static_cast<uint32_t>(window_size.y), .depth = 1
         },
@@ -101,7 +100,7 @@ void SwapChain::setup_depth_attachment(const Context *context) {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = depth_image_,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = depth_format,
+        .format = depth_format_,
         .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}
     };
     check(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_view_));

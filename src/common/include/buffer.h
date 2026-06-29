@@ -1,7 +1,11 @@
 #pragma once
 
+#include <vector>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+
+#include "context.h"
 
 class Context;
 
@@ -11,7 +15,7 @@ public:
 
     void create_buffer(const Context *context, VkDeviceSize size, VkBufferUsageFlags usage);
 
-    void copy_data(const void *src) const;
+    void update(const void *src) const;
 
     VkDeviceAddress device_address(const Context *context) const;
 
@@ -20,4 +24,25 @@ private:
     VmaAllocation allocation_{VK_NULL_HANDLE};
     VmaAllocationInfo allocation_info_{};
     VkDeviceSize size_{0};
+};
+
+template<typename T>
+class PerFrameBuffer {
+public:
+    explicit PerFrameBuffer(const Context *context) : ctx_(context),
+                                                     buffers_(context->get_max_frame_count()) {
+        for (auto &buffer: buffers_) {
+            buffer.create_buffer(context, sizeof(T), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+        }
+    }
+
+    void update(const uint32_t frame, const T *src) const {
+        buffers_[frame].update(src);
+    }
+
+    VkDeviceAddress address(const uint32_t frame) const { return buffers_[frame].device_address(ctx_); }
+
+private:
+    const Context *ctx_;
+    std::vector<Buffer> buffers_;
 };

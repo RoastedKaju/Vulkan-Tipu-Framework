@@ -37,6 +37,9 @@ public:
      * @return number of maximum frames in flight
      */
     uint32_t get_max_frame_count() const { return frame_data_.max_frames_in_flight_; }
+    uint32_t get_frame_index() const { return frame_data_.frame_index_; }
+    uint32_t get_image_index() const { return frame_data_.image_index_; }
+    SwapChain &get_swap_chain() { return swap_chain_; }
 
 private:
     bool create_instance(const char *app_name = "default");
@@ -84,4 +87,6 @@ private:
     friend class SwapChain;
     friend class Buffer;
     friend class Shader;
+    friend class PipelineLayoutBuilder;
+    friend class PipelineBuilder;
 };

@@ -16,6 +16,8 @@ public:
     void setup_depth_attachment(const Context *context);
 
     std::vector<VkImage> get_images() { return swap_chain_images_; };
+    VkFormat get_format() const { return swap_chain_format_; };
+    VkFormat get_depth_format() const { return depth_format_; };
 
 private:
     bool is_swap_chain_dirty_{false};
@@ -27,5 +29,6 @@ private:
     // depth attachment
     VkImage depth_image_{VK_NULL_HANDLE};
     VkImageView depth_image_view_{VK_NULL_HANDLE};
+    VkFormat depth_format_{VK_FORMAT_D32_SFLOAT};
     VmaAllocation depth_image_allocation_{VK_NULL_HANDLE};
 };

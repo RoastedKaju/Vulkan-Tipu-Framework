@@ -5,6 +5,7 @@
 #include "mesh.h"
 #include "buffer.h"
 #include "shader.h"
+#include "pipeline.h"
 
 struct ShaderData {
     glm::mat4 projection;
@@ -34,29 +35,58 @@ int main(int argc, char *argv[]) {
     // vertex buffer
     Buffer vertex_buffer{};
     vertex_buffer.create_buffer(ctx.get(), v_buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    vertex_buffer.copy_data(tank_mesh.data().vertices.data());
+    vertex_buffer.update(tank_mesh.data().vertices.data());
 
     // index buffer
     Buffer index_buffer{};
     index_buffer.create_buffer(ctx.get(), i_buf_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    index_buffer.copy_data(tank_mesh.data().indices.data());
+    index_buffer.update(tank_mesh.data().indices.data());
 
     // shader data and its buffers
-    // TODO: probably should move this to context class and only expose shader data size
     [[maybe_unused]] ShaderData shader_data{};
-    std::vector<Buffer> shader_data_buffers(ctx->get_max_frame_count());
-    // create buffers per frame in flight
-    for (auto i = 0; i < ctx->get_max_frame_count(); i++) {
-        shader_data_buffers[i].create_buffer(ctx.get(), sizeof(ShaderData), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    }
+    PerFrameBuffer<ShaderData> push_const{ctx.get()};
 
     // load shaders
-    [[maybe_unused]] VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
-                                                                               "assets/shaders/vert.glsl",
-                                                                               shaderc_vertex_shader);
-    [[maybe_unused]] VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(),
-                                                                               "assets/shaders/frag.glsl",
-                                                                               shaderc_fragment_shader);
+    [[maybe_unused]] const VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
+        "assets/shaders/vert.glsl",
+        shaderc_vertex_shader);
+    [[maybe_unused]] const VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(),
+        "assets/shaders/frag.glsl",
+        shaderc_fragment_shader);
+    // texture descriptor set
+
+    // create pipeline layout
+    PipelineLayoutBuilder pipeline_layout_desc{};
+    // pipeline_layout_desc.add_descriptor_set_layout()
+    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress));
+    const VkPipelineLayout pipeline_layout = pipeline_layout_desc.build(ctx.get());
+
+    // create pipeline
+    PipelineBuilder pipeline_builder{};
+    pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, vert_shader);
+    pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, frag_shader);
+    constexpr VkVertexInputBindingDescription vertex_binding{
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
+    const std::vector<VkVertexInputAttributeDescription> vertex_attributes{
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT},
+        {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
+        {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+    };
+    pipeline_builder.set_vertex_Layout(vertex_binding, vertex_attributes);
+    pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipeline_builder.set_viewport(1, 1, true);
+    pipeline_builder.set_rasterization(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
+    pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
+    pipeline_builder.set_depth_stencil(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
+    pipeline_builder.set_color_blend(0xF);
+    VkPipeline pipeline = pipeline_builder.build(ctx.get(),
+                                                 pipeline_layout,
+                                                 ctx->get_swap_chain().get_format(),
+                                                 ctx->get_swap_chain().get_depth_format());
+
 
     return EXIT_SUCCESS;
 }
