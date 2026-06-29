@@ -53,11 +53,14 @@ int main(int argc, char *argv[]) {
     [[maybe_unused]] const VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(),
         "assets/shaders/frag.glsl",
         shaderc_fragment_shader);
+
     // texture descriptor set
+    TextureDescriptorSet descriptor_set{};
+    descriptor_set.create(ctx->get_device(), 64);
 
     // create pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
-    // pipeline_layout_desc.add_descriptor_set_layout()
+    pipeline_layout_desc.add_descriptor_set_layout(descriptor_set.layout());
     pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress));
     const VkPipelineLayout pipeline_layout = pipeline_layout_desc.build(ctx.get());
 
@@ -75,17 +78,42 @@ int main(int argc, char *argv[]) {
         {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
         {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
     };
-    pipeline_builder.set_vertex_Layout(vertex_binding, vertex_attributes);
+    pipeline_builder.set_vertex_layout(vertex_binding, vertex_attributes);
     pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipeline_builder.set_viewport(1, 1, true);
     pipeline_builder.set_rasterization(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
     pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
     pipeline_builder.set_depth_stencil(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
-    pipeline_builder.set_color_blend(0xF);
+    pipeline_builder.set_color_blend(1, 0xF);
     VkPipeline pipeline = pipeline_builder.build(ctx.get(),
                                                  pipeline_layout,
-                                                 ctx->get_swap_chain().get_format(),
+                                                 {ctx->get_swap_chain().get_format()},
                                                  ctx->get_swap_chain().get_depth_format());
+
+    // loop setup
+    Uint64 last_time = SDL_GetPerformanceCounter();
+    bool quit = false;
+
+    // super loop
+    while (!quit) {
+        Uint64 current_time = SDL_GetPerformanceCounter();
+        double delta_time = 0.0;
+        delta_time = static_cast<double>(current_time - last_time) / static_cast<double>(SDL_GetPerformanceFrequency());
+        last_time = current_time;
+
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT) {
+                quit = true;
+            }
+        }
+
+        // update world
+
+        // render
+
+        // present
+    }
 
 
     return EXIT_SUCCESS;

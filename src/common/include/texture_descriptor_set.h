@@ -10,6 +10,8 @@ public:
 
     void update_texture_slot(const VkDevice device, uint32_t slot, const VkDescriptorImageInfo &image_info) const;
 
+    VkDescriptorSetLayout layout() const { return descriptor_set_layout_; }
+
 private:
     uint32_t max_texture_count_{64};
     VkDescriptorPool descriptor_pool_{VK_NULL_HANDLE};

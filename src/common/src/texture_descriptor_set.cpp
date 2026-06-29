@@ -78,7 +78,7 @@ void TextureDescriptorSet::update_texture_slot(const VkDevice device,
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = descriptor_set_,
         .dstBinding = 0,
-        .dstArrayElement = slot, // Update the specific index in our giant array
+        .dstArrayElement = slot,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo = &image_info

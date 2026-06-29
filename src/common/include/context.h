@@ -36,10 +36,12 @@ public:
      *
      * @return number of maximum frames in flight
      */
+    VkDevice get_device() const { return device_; }
+    VkPhysicalDevice get_physical_device() const { return physical_device_; }
+    SwapChain &get_swap_chain() { return swap_chain_; }
     uint32_t get_max_frame_count() const { return frame_data_.max_frames_in_flight_; }
     uint32_t get_frame_index() const { return frame_data_.frame_index_; }
     uint32_t get_image_index() const { return frame_data_.image_index_; }
-    SwapChain &get_swap_chain() { return swap_chain_; }
 
 private:
     bool create_instance(const char *app_name = "default");

@@ -19,6 +19,16 @@ class Context;
  */
 class PipelineLayoutBuilder {
 public:
+    PipelineLayoutBuilder() = default;
+
+    PipelineLayoutBuilder(const PipelineLayoutBuilder &) = delete;
+
+    PipelineLayoutBuilder &operator=(const PipelineLayoutBuilder &) = delete;
+
+    PipelineLayoutBuilder(PipelineLayoutBuilder &&) = delete;
+
+    PipelineLayoutBuilder &operator=(PipelineLayoutBuilder &&) = delete;
+
     PipelineLayoutBuilder &add_descriptor_set_layout(VkDescriptorSetLayout layout);
 
     PipelineLayoutBuilder &add_push_constant(VkShaderStageFlags stage, uint32_t size, uint32_t offset = 0);
@@ -32,9 +42,19 @@ private:
 
 class PipelineBuilder {
 public:
+    PipelineBuilder();
+
+    PipelineBuilder(const PipelineBuilder &) = delete;
+
+    PipelineBuilder &operator=(const PipelineBuilder &) = delete;
+
+    PipelineBuilder(PipelineBuilder &&) = delete;
+
+    PipelineBuilder &operator=(PipelineBuilder &&) = delete;
+
     PipelineBuilder &add_shader(VkShaderStageFlagBits stage, VkShaderModule module, const char *entry = "main");
 
-    PipelineBuilder &set_vertex_Layout(const VkVertexInputBindingDescription &binding,
+    PipelineBuilder &set_vertex_layout(const VkVertexInputBindingDescription &binding,
                                        const std::vector<VkVertexInputAttributeDescription> &attributes);
 
     PipelineBuilder &set_input_assembly(VkPrimitiveTopology topology);
@@ -47,11 +67,11 @@ public:
 
     PipelineBuilder &set_depth_stencil(bool depth_test, bool depth_write, VkCompareOp compare_op);
 
-    PipelineBuilder &set_color_blend(VkColorComponentFlags mask);
+    PipelineBuilder &set_color_blend(uint32_t attachment_count, const VkColorComponentFlags mask);
 
     [[nodiscard]] VkPipeline build(const Context *context,
                                    VkPipelineLayout layout,
-                                   VkFormat color_format,
+                                   const std::vector<VkFormat> &color_formats,
                                    VkFormat depth_format,
                                    const std::string &debug_name = "none");
 
@@ -64,6 +84,6 @@ private:
     VkPipelineRasterizationStateCreateInfo rasterization_state_{};
     VkPipelineMultisampleStateCreateInfo multisample_state_{};
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state_{};
-    VkPipelineColorBlendAttachmentState blend_attachment_{};
+    std::vector<VkPipelineColorBlendAttachmentState> blend_attachments_;
     VkPipelineColorBlendStateCreateInfo color_blend_state_{};
 };

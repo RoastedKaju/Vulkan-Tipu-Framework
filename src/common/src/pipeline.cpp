@@ -32,6 +32,66 @@ VkPipelineLayout PipelineLayoutBuilder::build(const Context *context, const std:
     return layout;
 }
 
+PipelineBuilder::PipelineBuilder() {
+    // default fall-back states
+    vertex_input_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+    };
+
+    input_assembly_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    viewport_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+
+    rasterization_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f
+    };
+
+    multisample_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE
+    };
+
+    depth_stencil_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE
+    };
+
+    blend_attachments_ = {
+        {
+            .blendEnable = VK_FALSE,
+            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+        }
+    };
+
+    color_blend_state_ = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments = blend_attachments_.data()
+    };
+}
+
 PipelineBuilder &PipelineBuilder::add_shader(const VkShaderStageFlagBits stage,
                                              const VkShaderModule module,
                                              const char *entry) {
@@ -39,13 +99,13 @@ PipelineBuilder &PipelineBuilder::add_shader(const VkShaderStageFlagBits stage,
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = stage,
         .module = module,
-        .pName = "main"
+        .pName = entry
     };
     shader_stages_.push_back(info);
     return *this;
 }
 
-PipelineBuilder &PipelineBuilder::set_vertex_Layout(
+PipelineBuilder &PipelineBuilder::set_vertex_layout(
     const VkVertexInputBindingDescription &binding,
     const std::vector<VkVertexInputAttributeDescription> &attributes) {
     vertex_input_state_ = {
@@ -112,25 +172,31 @@ PipelineBuilder &PipelineBuilder::set_depth_stencil(const bool depth_test,
     return *this;
 }
 
-PipelineBuilder &PipelineBuilder::set_color_blend(const VkColorComponentFlags mask) {
-    blend_attachment_ = {.colorWriteMask = mask};
+PipelineBuilder &PipelineBuilder::set_color_blend(const uint32_t attachment_count, const VkColorComponentFlags mask) {
+    blend_attachments_.assign(attachment_count, {
+                                  .blendEnable = VK_FALSE,
+                                  .colorWriteMask = mask
+                              });
+
     color_blend_state_ = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &blend_attachment_
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = attachment_count,
+        .pAttachments = blend_attachments_.data()
     };
     return *this;
 }
 
 VkPipeline PipelineBuilder::build(const Context *context,
                                   const VkPipelineLayout layout,
-                                  VkFormat color_format,
+                                  const std::vector<VkFormat> &color_formats,
                                   const VkFormat depth_format,
                                   const std::string &debug_name) {
+    assert(color_formats.size() == blend_attachments_.size() && "Color format count must match blend attachment count");
     VkPipelineRenderingCreateInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &color_format,
+        .colorAttachmentCount = static_cast<uint32_t>(color_formats.size()),
+        .pColorAttachmentFormats = color_formats.data(),
         .depthAttachmentFormat = depth_format
     };
 
