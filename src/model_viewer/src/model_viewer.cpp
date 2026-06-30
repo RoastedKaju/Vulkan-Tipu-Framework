@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     // super loop
     while (!quit) {
         Uint64 current_time = SDL_GetPerformanceCounter();
-        double delta_time = 0.0;
+        [[maybe_unused]] double delta_time = 0.0;
         delta_time = static_cast<double>(current_time - last_time) / static_cast<double>(SDL_GetPerformanceFrequency());
         last_time = current_time;
 

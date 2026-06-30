@@ -21,5 +21,5 @@ target_compile_definitions(Common PUBLIC GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_
 
 # Shader-C linking
 target_include_directories(Common PUBLIC "${CMAKE_SOURCE_DIR}/extern/shaderc")
-target_link_directories(Common PUBLIC "${CMAKE_SOURCE_DIR}/extern/shaderc/bin")
+target_link_directories(Common PUBLIC "${CMAKE_SOURCE_DIR}/extern/shaderc/lib")
 target_link_libraries(Common PUBLIC shaderc_shared)

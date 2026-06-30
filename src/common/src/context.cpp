@@ -216,9 +216,9 @@ void Context::acquire_command_buffer() {
 void Context::begin_rendering() {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
-    const auto current_swap_chain_image = swap_chain_.get_images()[image_index];
-    auto &current_swap_chain_image_state = swap_chain_.get_states()[image_index];
-    auto &current_depth_image_state = swap_chain_.get_depth_state();
+    const VkImage current_swap_chain_image = swap_chain_.get_images()[image_index].image;
+    ImageState &current_swap_chain_image_state = swap_chain_.get_images()[image_index].state;
+    ImageState &current_depth_image_state = swap_chain_.get_depth_image().state;
 
     const auto cmd = frame_data_.command_buffers_[frame_index];
 
@@ -237,7 +237,7 @@ void Context::begin_rendering() {
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // for depth image
-    transition_image(cmd, swap_chain_.get_depth_image(),
+    transition_image(cmd, swap_chain_.get_depth_image().image,
                      current_depth_image_state,
                      VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -247,7 +247,7 @@ void Context::begin_rendering() {
     // rendering attachments
     const VkRenderingAttachmentInfo color_attachment_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swap_chain_.get_views()[image_index],
+        .imageView = swap_chain_.get_images()[image_index].view,
         .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -255,7 +255,7 @@ void Context::begin_rendering() {
     };
     const VkRenderingAttachmentInfo depth_attachment_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swap_chain_.get_depth_image_view(),
+        .imageView = swap_chain_.get_depth_image().view,
         .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -342,8 +342,8 @@ void Context::end_rendering() const {
 void Context::submit() {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
-    const auto current_swap_chain_image = swap_chain_.get_images()[image_index];
-    auto &current_swap_chain_image_state = swap_chain_.get_states()[image_index];
+    const auto current_swap_chain_image = swap_chain_.get_images()[image_index].image;
+    auto &current_swap_chain_image_state = swap_chain_.get_images()[image_index].state;
 
     const auto cmd = frame_data_.command_buffers_[frame_index];
 

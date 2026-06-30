@@ -39,18 +39,25 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
     uint32_t image_count{0};
     check(vkGetSwapchainImagesKHR(device, swap_chain_, &image_count, nullptr));
     swap_chain_images_.resize(image_count);
-    swap_chain_image_states_.resize(image_count);
-    check(vkGetSwapchainImagesKHR(device, swap_chain_, &image_count, swap_chain_images_.data()));
-    swap_chain_image_views_.resize(image_count);
+
+    std::vector<VkImage> images(image_count);
+    check(vkGetSwapchainImagesKHR(device, swap_chain_, &image_count, images.data()));
+
+    // copy the image handles back to our image wrapper
+    for (uint32_t i = 0; i < image_count; ++i)
+    {
+        swap_chain_images_[i].image = images[i];
+    }
+
     for (auto i = 0; i < image_count; ++i) {
         VkImageViewCreateInfo image_view_create_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = swap_chain_images_[i],
+            .image = swap_chain_images_[i].image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = image_format,
             .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
         };
-        check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_image_views_[i]));
+        check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_images_[i].view));
     }
 
     std::printf("Swap-chain created.\n");
@@ -96,16 +103,16 @@ void SwapChain::setup_depth_attachment(const Context *context) {
         context->allocator_,
         &depth_image_create_info,
         &depth_allocation_create_info,
-        &depth_image_,
+        &depth_image_.image,
         &depth_image_allocation_, nullptr));
     const VkImageViewCreateInfo depth_view_create_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = depth_image_,
+        .image = depth_image_.image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = depth_format_,
         .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}
     };
-    check(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_view_));
+    check(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_.view));
 
     std::printf("Depth attachment setup.\n");
 }
