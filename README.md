@@ -8,15 +8,16 @@ Tiny and lightweight renderer for learning purposes, final goal of this project 
 ---
 
 ## Features
-- Vulkan context class to handle window handle and swapchain
-- Pipeline and Layout builder helpers
-- Image layout state presistence
-- Automatic memory barriers
-- Dynamic rendering
-- Buffer Device Address (BDA) based push constant
-- Bindless textures support
+- Vulkan context class which handles window management and swapchain.
+- Pipeline and Layout builder helpers.
+- Image layout state presistence.
+- Automatic memory barriers.
+- **Dynamic rendering**.
+- **Buffer Device Address** (BDA) based push constant.
+- **Bindless textures** support.
 
 ## Technology
-Languages: C++ 20, GLSL  
-Asset Management: TinyGLTF, Shader-C  
-Third-Party: Volk, VMA, SDL3, GLM
+**Languages**: C++ 20, GLSL  
+**Build System**: CMake  
+**Asset Management**: [TinyGLTF](https://github.com/syoyo/tinygltf), [Shader-C](https://github.com/google/shaderc)  
+**Third-Party**: [Volk](https://github.com/zeux/volk), [VMA](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator), [SDL3](https://github.com/libsdl-org/SDL), [GLM](https://github.com/g-truc/glm)
