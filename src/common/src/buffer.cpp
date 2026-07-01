@@ -62,6 +62,8 @@ void Buffer::create(const BufferDesc &desc) {
     }
 
     for (auto &buffer: buffers_) {
+        buffer.size_ = desc.size;
+
         check(vmaCreateBuffer(
             desc.context->allocator_,
             &buffer_create_info,
