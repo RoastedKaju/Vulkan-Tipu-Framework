@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.24)
+
+project(VulkanSandbox)
 
 # find vulkan
 if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
@@ -16,8 +18,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
-project(VulkanSandbox)
-
 find_package(Vulkan REQUIRED)
 
 # Third-party
@@ -27,8 +27,19 @@ add_subdirectory(extern/vma)
 add_subdirectory(extern/volk)
 add_subdirectory(extern/tinygltf)
 
+set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
+set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
+set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "" FORCE)
+set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+
+add_subdirectory(extern/gshader)
+
 # Common library
 add_subdirectory(src/common)
 
 # Examples
 add_subdirectory(src/model_viewer)
+add_subdirectory(src/triangle)

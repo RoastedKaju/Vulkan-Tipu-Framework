@@ -72,6 +72,8 @@ public:
 
     void draw_indexed(uint32_t index_count) const;
 
+    void draw(uint32_t vertex_count) const;
+
     void end_rendering() const;
 
     void submit();

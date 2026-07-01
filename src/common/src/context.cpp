@@ -390,6 +390,13 @@ void Context::draw_indexed(const uint32_t index_count) const {
     vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 0);
 }
 
+void Context::draw(uint32_t vertex_count) const
+{
+    const uint32_t frame_index = frame_data_.frame_index_;
+    const auto cmd = frame_data_.command_buffers_[frame_index];
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+}
+
 void Context::end_rendering() const {
     const uint32_t frame_index = frame_data_.frame_index_;
     const auto cmd = frame_data_.command_buffers_[frame_index];
