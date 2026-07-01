@@ -11,7 +11,6 @@ Tiny and lightweight renderer for learning purposes, final goal of this project 
 - Vulkan context class which handles window management and swapchain.
 - Pipeline and Layout builder helpers.
 - Image layout state presistence.
-- Automatic memory barriers.
 - **Dynamic rendering**.
 - **Buffer Device Address** (BDA) based push constant.
 - **Bindless textures** support.
