@@ -4,6 +4,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "image.h"
+
 struct Attachment {
     static inline constexpr uint32_t kMaxColorAttachments = 8;
 
@@ -30,4 +32,9 @@ private:
     VkRenderingAttachmentInfo depth_{};
     uint32_t color_count_ = 0;
     bool has_depth_ = false;
+};
+
+struct FrameBuffer {
+    // TODO: add array for max color attachments here
+    Image* depth_image_;
 };

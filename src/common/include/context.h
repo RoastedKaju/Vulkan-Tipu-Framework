@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <vector>
+#include <memory>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -19,6 +20,18 @@ struct Config {
     std::string app_name_ = "default";
     VkPresentModeKHR present_mode_ = VK_PRESENT_MODE_FIFO_KHR;
     bool enable_validation_ = true;
+};
+
+struct TextureDesc {
+    glm::ivec2 dimension_{0, 0};
+    uint32_t depth_{1};
+    uint32_t mip_levels_{1};
+    uint32_t array_layers_{1};
+    VkSampleCountFlagBits samples_{VK_SAMPLE_COUNT_1_BIT};
+    VkImageTiling tiling_{VK_IMAGE_TILING_OPTIMAL};
+    VkImageUsageFlags usage_{0};
+    VkImageAspectFlags aspect_{VK_IMAGE_ASPECT_COLOR_BIT};
+    VkFormat format_ = VK_FORMAT_UNDEFINED;
 };
 
 class Context {
@@ -39,9 +52,13 @@ public:
 
     SDL_Window *create_window(const char *title, uint32_t width, uint32_t height);
 
+    std::unique_ptr<Image> create_texture(const TextureDesc &desc) const;
+
+    VkFormat get_device_depth_format() const;
+
     void acquire_command_buffer();
 
-    void begin_rendering(const Attachment &attachment);
+    void begin_rendering(const Attachment &attachment, const FrameBuffer &frame_buffer);
 
     void bind_pipeline(VkPipeline pipeline) const;
 

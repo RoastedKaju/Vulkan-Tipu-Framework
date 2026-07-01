@@ -190,6 +190,65 @@ SDL_Window *Context::create_window(const char *title, const uint32_t width, cons
     return window;
 }
 
+std::unique_ptr<Image> Context::create_texture(const TextureDesc &desc) const {
+    auto image = std::make_unique<Image>();
+    image->width = desc.dimension_.x;
+    image->height = desc.dimension_.y;
+    image->format = desc.format_;
+    image->aspect = desc.aspect_;
+
+    const VkImageCreateInfo image_create_info{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = image->format,
+        .extent{.width = image->width, .height = image->height, .depth = desc.depth_},
+        .mipLevels = desc.mip_levels_,
+        .arrayLayers = desc.array_layers_,
+        .samples = desc.samples_,
+        .tiling = desc.tiling_,
+        .usage = desc.usage_,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+    constexpr VmaAllocationCreateInfo alloc_create_info{
+        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    check(vmaCreateImage(
+        allocator_,
+        &image_create_info,
+        &alloc_create_info,
+        &image->image, &image->allocation, nullptr));
+
+    const VkImageViewCreateInfo view_create_info{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = image->image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = image->format,
+        .subresourceRange{
+            .aspectMask = desc.aspect_,
+            .levelCount = desc.mip_levels_,
+            .layerCount = desc.array_layers_,
+        }
+    };
+    check(vkCreateImageView(device_, &view_create_info, nullptr, &image->view));
+
+    return image;
+}
+
+VkFormat Context::get_device_depth_format() const {
+    // ReSharper disable once CppTooWideScopeInitStatement
+    std::vector<VkFormat> depth_format_list{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+    // ReSharper disable once CppLocalVariableMayBeConst
+    for (VkFormat &format: depth_format_list) {
+        VkFormatProperties2 format_properties{.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
+        vkGetPhysicalDeviceFormatProperties2(physical_device_, format, &format_properties);
+        if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            return format;
+        }
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
 void Context::acquire_command_buffer() {
     const VkSwapchainKHR swap_chain = swap_chain_.get();
     const uint32_t frame_index = frame_data_.frame_index_;
@@ -214,7 +273,7 @@ void Context::acquire_command_buffer() {
     }
 }
 
-void Context::begin_rendering(const Attachment &attachment) {
+void Context::begin_rendering(const Attachment &attachment, const FrameBuffer &frame_buffer) {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
     const VkImage current_swap_chain_image = swap_chain_.get_images()[image_index].image;
@@ -238,12 +297,14 @@ void Context::begin_rendering(const Attachment &attachment) {
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // for depth image
-    transition_image(cmd, swap_chain_.get_depth_image().image,
-                     current_depth_image_state,
-                     VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-                     VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                     VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+    if (attachment.has_depth()) {
+        transition_image(cmd, frame_buffer.depth_image_->image,
+                         current_depth_image_state,
+                         VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                         VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+    }
 
     // rendering attachments
     std::array<VkRenderingAttachmentInfo, Attachment::kMaxColorAttachments> resolved_colors{};
@@ -254,7 +315,7 @@ void Context::begin_rendering(const Attachment &attachment) {
 
     VkRenderingAttachmentInfo resolved_depth = attachment.depth();
     if (attachment.has_depth()) {
-        resolved_depth.imageView = swap_chain_.get_depth_image().view;
+        resolved_depth.imageView = frame_buffer.depth_image_->view;
     }
 
     const VkRenderingInfo rendering_info{
@@ -382,7 +443,6 @@ void Context::submit() {
 
 void Context::create_swap_chain() {
     swap_chain_.init_swap_chain(this);
-    swap_chain_.setup_depth_attachment(this);
 }
 
 void Context::create_frame_resources() {

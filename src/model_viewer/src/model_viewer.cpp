@@ -9,6 +9,9 @@
 #include "pipeline.h"
 #include "texture_descriptor_set.h"
 
+constexpr uint32_t kWidth = 1280u;
+constexpr uint32_t kHeight = 720u;
+
 struct ShaderData {
     glm::mat4 projection;
     glm::mat4 view;
@@ -24,7 +27,7 @@ int main(int argc, char *argv[]) {
 
     const auto ctx = std::make_unique<Context>(config);
     ctx->initialize();
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("Model Viewer", 1280u, 720u);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("Model Viewer", kWidth, kHeight);
 
     // load model
     Mesh tank_mesh{};
@@ -61,6 +64,18 @@ int main(int argc, char *argv[]) {
     TextureDescriptorSet descriptor_set{};
     descriptor_set.create(ctx->get_device(), 64);
 
+    // create depth texture
+    TextureDesc depth_tex_desc{};
+    depth_tex_desc.dimension_ = {kWidth, kHeight};
+    depth_tex_desc.mip_levels_ = 1;
+    depth_tex_desc.aspect_ = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depth_tex_desc.array_layers_ = 1;
+    depth_tex_desc.depth_ = 1.0;
+    depth_tex_desc.format_ = ctx->get_device_depth_format();
+    depth_tex_desc.tiling_ = VK_IMAGE_TILING_OPTIMAL;
+    depth_tex_desc.usage_ = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    auto depth_texture = ctx->create_texture(depth_tex_desc);
+
     // create pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
     pipeline_layout_desc.add_descriptor_set_layout(descriptor_set.layout());
@@ -91,7 +106,7 @@ int main(int argc, char *argv[]) {
     VkPipeline pipeline = pipeline_builder.build(ctx.get(),
                                                  pipeline_layout,
                                                  {ctx->get_swap_chain().get_format()},
-                                                 ctx->get_swap_chain().get_depth_format());
+                                                 depth_texture->format);
 
     // loop setup
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -149,7 +164,10 @@ int main(int argc, char *argv[]) {
                 VK_ATTACHMENT_STORE_OP_DONT_CARE
             );
 
-            ctx->begin_rendering(scene_pass);
+            FrameBuffer frame_buffer{};
+            frame_buffer.depth_image_ = depth_texture.get();
+
+            ctx->begin_rendering(scene_pass, frame_buffer);
             {
                 ctx->bind_pipeline(pipeline);
                 ctx->bind_descriptor_set(pipeline_layout, descriptor_set.get());

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <limits>
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 
 /**
  * Image state is used by memory barriers to save the current state of an image.
@@ -20,5 +22,9 @@ struct Image {
     VkImageView view = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    VmaAllocation allocation{VK_NULL_HANDLE};
+    uint32_t index{std::numeric_limits<uint32_t>::max()};
     ImageState state{};
 };
