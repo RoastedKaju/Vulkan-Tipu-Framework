@@ -13,6 +13,7 @@
 
 #include "frame.h"
 #include "swap_chain.h"
+#include "attachment.h"
 
 struct Config {
     std::string app_name_ = "default";
@@ -40,7 +41,7 @@ public:
 
     void acquire_command_buffer();
 
-    void begin_rendering();
+    void begin_rendering(const Attachment &attachment);
 
     void bind_pipeline(VkPipeline pipeline) const;
 

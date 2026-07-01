@@ -97,6 +97,7 @@ bool Context::setup_device(const uint32_t device_index) {
     vkGetPhysicalDeviceProperties2(devices[device_index], &device_properties);
     physical_device_ = devices[device_index];
     printf("Selected device: %s.\n", device_properties.properties.deviceName);
+    assert(Attachment::kMaxColorAttachments <= device_properties.properties.limits.maxColorAttachments);
 
     // queue
     uint32_t queue_family_count{0};
@@ -213,7 +214,7 @@ void Context::acquire_command_buffer() {
     }
 }
 
-void Context::begin_rendering() {
+void Context::begin_rendering(const Attachment &attachment) {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
     const VkImage current_swap_chain_image = swap_chain_.get_images()[image_index].image;
@@ -245,22 +246,17 @@ void Context::begin_rendering() {
                      VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 
     // rendering attachments
-    const VkRenderingAttachmentInfo color_attachment_info{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swap_chain_.get_images()[image_index].view,
-        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}
-    };
-    const VkRenderingAttachmentInfo depth_attachment_info{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swap_chain_.get_depth_image().view,
-        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .clearValue = {.depthStencil = {1.0f, 0}}
-    };
+    std::array<VkRenderingAttachmentInfo, Attachment::kMaxColorAttachments> resolved_colors{};
+    for (uint32_t i = 0; i < attachment.color_count(); ++i) {
+        resolved_colors[i] = attachment.color(i);
+        resolved_colors[i].imageView = swap_chain_.get_images()[image_index].view;
+    }
+
+    VkRenderingAttachmentInfo resolved_depth = attachment.depth();
+    if (attachment.has_depth()) {
+        resolved_depth.imageView = swap_chain_.get_depth_image().view;
+    }
+
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea{
@@ -270,9 +266,9 @@ void Context::begin_rendering() {
             }
         },
         .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &color_attachment_info,
-        .pDepthAttachment = &depth_attachment_info,
+        .colorAttachmentCount = attachment.color_count(),
+        .pColorAttachments = resolved_colors.data(),
+        .pDepthAttachment = attachment.has_depth() ? &resolved_depth : nullptr,
     };
 
     vkCmdBeginRendering(cmd, &rendering_info);

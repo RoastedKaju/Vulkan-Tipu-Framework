@@ -32,7 +32,7 @@ public:
     VkFormat get_format() const { return swap_chain_format_; };
     std::vector<Image> &get_images() { return swap_chain_images_; }
 
-    VkFormat get_depth_format() const { return depth_format_; };
+    VkFormat get_depth_format() const { return depth_image_.format; };
     Image &get_depth_image() { return depth_image_; };
 
     void mark_swap_chain_dirty() { is_swap_chain_dirty_ = true; }
@@ -46,6 +46,5 @@ private:
 
     // depth attachment
     Image depth_image_;
-    VkFormat depth_format_{VK_FORMAT_D32_SFLOAT};
     VmaAllocation depth_image_allocation_{VK_NULL_HANDLE};
 };

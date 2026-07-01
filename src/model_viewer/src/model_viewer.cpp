@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
     // super loop
     while (!quit) {
         Uint64 current_time = SDL_GetPerformanceCounter();
-        [[maybe_unused]] double delta_time = 0.0;
-        delta_time = static_cast<double>(current_time - last_time) / static_cast<double>(SDL_GetPerformanceFrequency());
+        [[maybe_unused]] double delta_time = static_cast<double>(current_time - last_time) /
+                                             static_cast<double>(SDL_GetPerformanceFrequency());
         last_time = current_time;
 
         SDL_Event event;
@@ -135,7 +135,21 @@ int main(int argc, char *argv[]) {
 
             push_const.update(frame_index, &shader_data); // upload data to buffer on GPU
 
-            ctx->begin_rendering();
+            // attachments
+            Attachment scene_pass{};
+            scene_pass.add_color(
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_ATTACHMENT_STORE_OP_STORE,
+                {0.0f, 0.0f, 0.0f, 1.0f}
+            );
+            scene_pass.set_depth(
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_ATTACHMENT_STORE_OP_DONT_CARE
+            );
+
+            ctx->begin_rendering(scene_pass);
             {
                 ctx->bind_pipeline(pipeline);
                 ctx->bind_descriptor_set(pipeline_layout, descriptor_set.get());

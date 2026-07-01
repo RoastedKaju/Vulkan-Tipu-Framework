@@ -44,9 +44,10 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
     check(vkGetSwapchainImagesKHR(device, swap_chain_, &image_count, images.data()));
 
     // copy the image handles back to our image wrapper
-    for (uint32_t i = 0; i < image_count; ++i)
-    {
+    for (uint32_t i = 0; i < image_count; ++i) {
         swap_chain_images_[i].image = images[i];
+        swap_chain_images_[i].format = swap_chain_format_;
+        swap_chain_images_[i].aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
     for (auto i = 0; i < image_count; ++i) {
@@ -55,7 +56,7 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
             .image = swap_chain_images_[i].image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = image_format,
-            .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+            .subresourceRange = {.aspectMask = swap_chain_images_[i].aspect, .levelCount = 1, .layerCount = 1}
         };
         check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_images_[i].view));
     }
@@ -75,16 +76,16 @@ void SwapChain::setup_depth_attachment(const Context *context) {
         VkFormatProperties2 format_properties{.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
         vkGetPhysicalDeviceFormatProperties2(physical_device, format, &format_properties);
         if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-            depth_format_ = format;
+            depth_image_.format = format;
             break;
         }
     }
 
-    assert(depth_format_ != VK_FORMAT_UNDEFINED && "Depth format is undefined.\n");
+    assert(depth_image_.format != VK_FORMAT_UNDEFINED && "Depth format is undefined.\n");
     const VkImageCreateInfo depth_image_create_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = depth_format_,
+        .format = depth_image_.format,
         .extent{
             .width = static_cast<uint32_t>(window_size.x), .height = static_cast<uint32_t>(window_size.y), .depth = 1
         },
@@ -109,7 +110,7 @@ void SwapChain::setup_depth_attachment(const Context *context) {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = depth_image_.image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = depth_format_,
+        .format = depth_image_.format,
         .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}
     };
     check(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_.view));
