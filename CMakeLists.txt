@@ -27,19 +27,17 @@ add_subdirectory(extern/vma)
 add_subdirectory(extern/volk)
 add_subdirectory(extern/tinygltf)
 
+# skip unnesscary build steps for shader-c
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "" FORCE)
 set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
 
-set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
-set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+add_subdirectory(extern/shaderc)
 
-add_subdirectory(extern/gshader)
-
-# Common library
-add_subdirectory(src/common)
+# Render library
+add_subdirectory(src/tipu)
 
 # Examples
-add_subdirectory(src/model_viewer)
-add_subdirectory(src/triangle)
+add_subdirectory(examples/triangle)
+add_subdirectory(examples/model)
