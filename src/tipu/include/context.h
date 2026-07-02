@@ -83,6 +83,11 @@ public:
 
     std::unique_ptr<Image> load_texture(const std::filesystem::path &path, const glm::ivec3 &color);
 
+    // gets new window size
+    void update_window_size();
+
+    void recreate_swap_chain();
+
     /**
      *
      * @return number of maximum frames in flight
@@ -94,6 +99,8 @@ public:
     uint32_t get_frame_index() const { return frame_data_.frame_index_; }
     uint32_t get_image_index() const { return frame_data_.image_index_; }
     DescriptorRegistry &get_texture_registry() { return descriptor_registry_; }
+    SDL_Window *get_window() const { return window_; }
+    glm::ivec2 get_window_size() const { return window_size_; }
 
 private:
     bool create_instance(const char *app_name = "default");

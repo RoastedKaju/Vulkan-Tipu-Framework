@@ -27,6 +27,8 @@ public:
 
     void setup_depth_attachment(const Context *context);
 
+    void recreate_swap_chain(Context *context);
+
     VkSwapchainKHR get() const { return swap_chain_; }
 
     VkFormat get_format() const { return swap_chain_format_; };

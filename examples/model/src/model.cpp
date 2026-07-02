@@ -199,6 +199,13 @@ int main(int argc, char *argv[]) {
             ctx->end_rendering();
         }
         ctx->submit();
+
+        if (ctx->get_swap_chain().is_swap_chain_dirty()) {
+            ctx->recreate_swap_chain();
+            // recreate depth texture
+            depth_tex_desc.dimension_ = ctx->get_window_size();
+            depth_texture = ctx->create_texture(depth_tex_desc);
+        }
     }
 
     return EXIT_SUCCESS;

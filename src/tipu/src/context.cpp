@@ -180,10 +180,10 @@ bool Context::setup_device(const uint32_t device_index) {
 
 SDL_Window *Context::create_window(const char *title, const uint32_t width, const uint32_t height) {
     // create window and surface
-    SDL_Window *window = SDL_CreateWindow(title, width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    assert(window && "Failed to create window");
-    check(SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_));
-    check(SDL_GetWindowSize(window, &window_size_.x, &window_size_.y));
+    window_ = SDL_CreateWindow(title, width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    assert(window_ && "Failed to create window");
+    check(SDL_Vulkan_CreateSurface(window_, instance_, nullptr, &surface_));
+    check(SDL_GetWindowSize(window_, &window_size_.x, &window_size_.y));
 
     // initialize bindless texture registry
     descriptor_registry_.init(device_);
@@ -192,7 +192,7 @@ SDL_Window *Context::create_window(const char *title, const uint32_t width, cons
     create_swap_chain();
     create_frame_resources();
 
-    return window;
+    return window_;
 }
 
 std::unique_ptr<Image> Context::create_texture(const TextureDesc &desc) const {
@@ -268,13 +268,12 @@ void Context::acquire_command_buffer() {
                                                                      UINT64_MAX,
                                                                      image_acquire_semaphores[frame_index],
                                                                      VK_NULL_HANDLE, &frame_data_.image_index_);
-    if (acquire_next_image_result < VK_SUCCESS) {
-        if (acquire_next_image_result == VK_ERROR_OUT_OF_DATE_KHR) {
-            swap_chain_.mark_swap_chain_dirty();
-        } else {
-            printf("Swap-chain check failed %d\b", acquire_next_image_result);
-            exit(EXIT_FAILURE);
-        }
+
+    if (acquire_next_image_result == VK_ERROR_OUT_OF_DATE_KHR || acquire_next_image_result == VK_SUBOPTIMAL_KHR) {
+        swap_chain_.mark_swap_chain_dirty();
+    } else if (acquire_next_image_result != VK_SUCCESS) {
+        printf("Swap-chain check failed %d\n", acquire_next_image_result);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -544,6 +543,14 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     image->index = descriptor_registry_.register_texture(image->view, default_sampler_);
 
     return image;
+}
+
+void Context::update_window_size() {
+    check(SDL_GetWindowSize(window_, &window_size_.x, &window_size_.y));
+}
+
+void Context::recreate_swap_chain() {
+    swap_chain_.recreate_swap_chain(this);
 }
 
 void Context::create_swap_chain() {
