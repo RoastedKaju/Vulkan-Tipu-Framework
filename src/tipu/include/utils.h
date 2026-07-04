@@ -83,19 +83,19 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
         uvs = reinterpret_cast<const float *>(get_accessor_data(model, model.accessors[uv_it->second]));
     }
 
-    mesh.vertices.resize(pos_accessor.count);
+    mesh.vertices_.resize(pos_accessor.count);
 
     for (size_t i = 0; i < pos_accessor.count; i++) {
         Vertex v{};
 
-        v.position = {
+        v.position_ = {
             positions[i * 3 + 0],
             positions[i * 3 + 1],
             positions[i * 3 + 2]
         };
 
         if (normals) {
-            v.normal = {
+            v.normal_ = {
                 normals[i * 3 + 0],
                 normals[i * 3 + 1],
                 normals[i * 3 + 2],
@@ -103,13 +103,13 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
         }
 
         if (uvs) {
-            v.uv = {
+            v.uv_ = {
                 uvs[i * 2 + 0],
                 uvs[i * 2 + 1],
             };
         }
 
-        mesh.vertices[i] = v;
+        mesh.vertices_[i] = v;
     }
 
     if (primitive.indices >= 0) {
@@ -117,13 +117,13 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
 
         const uint8_t *index_data = get_accessor_data(model, index_accessor);
 
-        mesh.indices.resize(index_accessor.count);
+        mesh.indices_.resize(index_accessor.count);
 
         switch (index_accessor.componentType) {
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
                 const auto *src = reinterpret_cast<const uint8_t *>(index_data);
                 for (auto i = 0; i < index_accessor.count; i++) {
-                    mesh.indices[i] = src[i];
+                    mesh.indices_[i] = src[i];
                 }
                 break;
             }
@@ -131,7 +131,7 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
                 const auto *src = reinterpret_cast<const uint16_t *>(index_data);
                 for (auto i = 0; i < index_accessor.count; i++) {
-                    mesh.indices[i] = src[i];
+                    mesh.indices_[i] = src[i];
                 }
                 break;
             }
@@ -139,7 +139,7 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
             case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT: {
                 const auto *src = reinterpret_cast<const uint32_t *>(index_data);
                 for (auto i = 0; i < index_accessor.count; i++) {
-                    mesh.indices[i] = src[i];
+                    mesh.indices_[i] = src[i];
                 }
                 break;
             }

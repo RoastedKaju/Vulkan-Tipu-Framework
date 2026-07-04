@@ -33,12 +33,12 @@ int main(int argc, char *argv[]) {
     loaded_mesh.load_mesh(("assets/models/tank.glb"));
 
     // load texture
-    std::unique_ptr<Image> red_tex = ctx->load_texture("", glm::ivec3(255, 35, 20));
-    std::unique_ptr<Image> blue_tex = ctx->load_texture("", glm::ivec3(50, 20, 255));
+    std::unique_ptr<Image> red_tex = ctx->load_texture("assets/textures/camo.jpg");
+    std::unique_ptr<Image> blue_tex = ctx->load_texture("assets/textures/camo.jpg");
 
     // buffers for model
-    const VkDeviceSize v_buf_size = sizeof(Vertex) * loaded_mesh.data().vertices.size();
-    const VkDeviceSize i_buf_size = sizeof(uint32_t) * loaded_mesh.data().indices.size();
+    const VkDeviceSize v_buf_size = sizeof(Vertex) * loaded_mesh.data().vertices_.size();
+    const VkDeviceSize i_buf_size = sizeof(uint32_t) * loaded_mesh.data().indices_.size();
 
     // vertex buffer
     BufferDesc v_buf_desc{
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     };
     Buffer vertex_buffer{};
     vertex_buffer.create(v_buf_desc);
-    vertex_buffer.update(loaded_mesh.data().vertices.data());
+    vertex_buffer.update(loaded_mesh.data().vertices_.data());
 
     // index buffer
     BufferDesc i_buf_desc{
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     };
     Buffer index_buffer{};
     index_buffer.create(i_buf_desc);
-    index_buffer.update(loaded_mesh.data().indices.data());
+    index_buffer.update(loaded_mesh.data().indices_.data());
 
     // per frame uniform buffer
     BufferDesc u_buf_desc{
@@ -108,8 +108,8 @@ int main(int argc, char *argv[]) {
     };
     const std::vector<VkVertexInputAttributeDescription> vertex_attributes{
         {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT},
-        {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
-        {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+        {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal_)},
+        {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv_)},
     };
     pipeline_builder.set_vertex_layout(vertex_binding, vertex_attributes);
     pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
                 ctx->bind_vertex_buffer(vertex_buffer.get());
                 ctx->bind_index_buffer(index_buffer.get());
                 ctx->cmd_push_constants(pipeline_layout, uniform_buffer.address());
-                ctx->draw_indexed(loaded_mesh.data().indices.size());
+                ctx->draw_indexed(loaded_mesh.data().indices_.size());
             }
             ctx->end_rendering();
         }

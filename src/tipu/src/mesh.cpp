@@ -33,12 +33,12 @@ void Mesh::load_mesh(const std::filesystem::path &path) {
     for (const auto &primitive: model.meshes[0].primitives) {
         MeshData mesh_data = load_mesh_data(model, primitive);
 
-        const auto vertex_offset = static_cast<uint32_t>(data_.vertices.size());
+        const auto vertex_offset = static_cast<uint32_t>(data_.vertices_.size());
 
-        data_.vertices.insert(data_.vertices.end(), mesh_data.vertices.begin(), mesh_data.vertices.end());
+        data_.vertices_.insert(data_.vertices_.end(), mesh_data.vertices_.begin(), mesh_data.vertices_.end());
 
-        for (const uint32_t index: mesh_data.indices) {
-            data_.indices.push_back(index + vertex_offset);
+        for (const uint32_t index: mesh_data.indices_) {
+            data_.indices_.push_back(index + vertex_offset);
         }
     }
 }

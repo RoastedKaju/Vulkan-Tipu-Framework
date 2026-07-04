@@ -9,6 +9,7 @@
 
 #include "utils.h"
 #include "buffer.h"
+#include "stb_image.h"
 
 // debug callback
 // ReSharper disable once CppParameterMayBeConst
@@ -245,11 +246,24 @@ std::unique_ptr<Image> Context::create_texture(const TextureDesc &desc) const {
     return image;
 }
 
-std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, const glm::ivec3 &color) {
-    const auto raw_color_data = make_solid_color_texture(4, 4, color.r, color.g, color.b);
+std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path) {
+    if (!std::filesystem::exists(path)) {
+        throw std::runtime_error("Texture does not exist: " + path.string());
+    }
 
-    constexpr TextureDesc texture_desc{
-        .dimension_ = {4, 4},
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+
+    // ReSharper disable once CppTooWideScopeInitStatement
+    unsigned char *pixels = stbi_load(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    if (!pixels) {
+        std::printf("Failed to load texture: %s (%s)\n", path.string().c_str(), stbi_failure_reason());
+        exit(EXIT_FAILURE);
+    }
+
+    const TextureDesc texture_desc{
+        .dimension_ = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)},
         .depth_ = 1,
         .mip_levels_ = 1,
         .array_layers_ = 1,
@@ -264,15 +278,19 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     auto image = create_texture(texture_desc);
 
     // Upload pixel data
+    const VkDeviceSize data_size = static_cast<VkDeviceSize>(width) * height * 4;
     const BufferDesc buf_desc{
         .context = this,
         .usage_flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .size = raw_color_data.size(),
+        .size = data_size,
         .per_frame = false
     };
     Buffer data_buffer{};
     data_buffer.create(buf_desc);
-    data_buffer.update(raw_color_data.data());
+    data_buffer.update(pixels);
+
+    // free image data from CPU
+    stbi_image_free(pixels);
 
     constexpr VkFenceCreateInfo fence_one_time_create_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     VkFence fence_one_time{};
@@ -296,10 +314,13 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
                      VK_ACCESS_2_TRANSFER_WRITE_BIT,
                      VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
-    constexpr VkBufferImageCopy copy_region{
+    const VkBufferImageCopy copy_region{
         .bufferOffset = 0,
         .imageSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-        .imageExtent{.width = texture_desc.dimension_[0], .height = texture_desc.dimension_[1], .depth = 1}
+        .imageExtent{
+            .width = static_cast<uint32_t>(texture_desc.dimension_[0]),
+            .height = static_cast<uint32_t>(texture_desc.dimension_[1]), .depth = 1
+        }
     };
     vkCmdCopyBufferToImage(
         cmd_buf_one_time,

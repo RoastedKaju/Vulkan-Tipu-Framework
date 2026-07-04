@@ -57,7 +57,7 @@ public:
 
     std::unique_ptr<Image> create_texture(const TextureDesc &desc) const;
 
-    std::unique_ptr<Image> load_texture(const std::filesystem::path &path, const glm::ivec3 &color);
+    std::unique_ptr<Image> load_texture(const std::filesystem::path &path);
 
     VkFormat get_device_depth_format() const;
 

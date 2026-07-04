@@ -6,14 +6,14 @@
 #include <glm/glm.hpp>
 
 struct Vertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 uv;
+    glm::vec3 position_;
+    glm::vec3 normal_;
+    glm::vec2 uv_;
 };
 
 struct MeshData {
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<Vertex> vertices_;
+    std::vector<uint32_t> indices_;
 };
 
 class Mesh {
