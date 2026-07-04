@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
     TextureDesc depth_tex_desc{};
     depth_tex_desc.dimension_ = {kWidth, kHeight};
     depth_tex_desc.mip_levels_ = 1;
-    depth_tex_desc.aspect_ = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depth_tex_desc.aspect_ = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
     depth_tex_desc.array_layers_ = 1;
     depth_tex_desc.depth_ = 1.0;
     depth_tex_desc.format_ = ctx->get_device_depth_format();
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
     VkPipeline pipeline = pipeline_builder.build(ctx.get(),
                                                  pipeline_layout,
                                                  {ctx->get_swap_chain().get_format()},
-                                                 depth_texture->format);
+                                                 depth_texture->format_);
 
     // loop setup
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
             transform = glm::rotate(transform, glm::radians(45.0f * time), glm::vec3(0.0f, 1.0f, 0.0f));
             transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
-            shader_data.tex_index_ = red_tex->index;
+            shader_data.tex_index_ = red_tex->bindless_index_;
 
             uniform_buffer.update(&shader_data); // upload data to buffer on GPU
 
@@ -199,6 +199,7 @@ int main(int argc, char *argv[]) {
         if (ctx->get_swap_chain().is_swap_chain_dirty()) {
             ctx->recreate_swap_chain();
             // recreate depth texture
+            ctx->destroy_image(*depth_texture);
             depth_tex_desc.dimension_ = ctx->get_window_size();
             depth_texture = ctx->create_texture(depth_tex_desc);
         }

@@ -197,21 +197,26 @@ SDL_Window *Context::create_window(const char *title, const uint32_t width, cons
 
 std::unique_ptr<Image> Context::create_texture(const TextureDesc &desc) const {
     auto image = std::make_unique<Image>();
-    image->width = desc.dimension_.x;
-    image->height = desc.dimension_.y;
-    image->format = desc.format_;
-    image->aspect = desc.aspect_;
+    image->width_ = desc.dimension_.x;
+    image->height_ = desc.dimension_.y;
+    image->depth_ = desc.depth_;
+    image->format_ = desc.format_;
+    image->aspect_ = desc.aspect_;
+    image->usage_ = desc.usage_;
+    image->mip_levels_ = desc.mip_levels_;
+    image->array_layers_ = desc.array_layers_;
+    image->samples_ = desc.samples_;
 
     const VkImageCreateInfo image_create_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = image->format,
-        .extent{.width = image->width, .height = image->height, .depth = desc.depth_},
-        .mipLevels = desc.mip_levels_,
-        .arrayLayers = desc.array_layers_,
-        .samples = desc.samples_,
+        .format = image->format_,
+        .extent{.width = image->width_, .height = image->height_, .depth = image->depth_},
+        .mipLevels = image->mip_levels_,
+        .arrayLayers = image->array_layers_,
+        .samples = image->samples_,
         .tiling = desc.tiling_,
-        .usage = desc.usage_,
+        .usage = image->usage_,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
     const VmaAllocationCreateInfo alloc_create_info{
@@ -222,20 +227,20 @@ std::unique_ptr<Image> Context::create_texture(const TextureDesc &desc) const {
         allocator_,
         &image_create_info,
         &alloc_create_info,
-        &image->image, &image->allocation, nullptr));
+        &image->image_, &image->allocation_, nullptr));
 
     const VkImageViewCreateInfo view_create_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = image->image,
+        .image = image->image_,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = image->format,
+        .format = image->format_,
         .subresourceRange{
-            .aspectMask = desc.aspect_,
-            .levelCount = desc.mip_levels_,
-            .layerCount = desc.array_layers_,
+            .aspectMask = image->aspect_,
+            .levelCount = image->mip_levels_,
+            .layerCount = image->array_layers_,
         }
     };
-    check(vkCreateImageView(device_, &view_create_info, nullptr, &image->view));
+    check(vkCreateImageView(device_, &view_create_info, nullptr, &image->view_));
 
     return image;
 }
@@ -273,7 +278,7 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     VkFence fence_one_time{};
     check(vkCreateFence(device_, &fence_one_time_create_info, nullptr, &fence_one_time));
     VkCommandBuffer cmd_buf_one_time{};
-    VkCommandBufferAllocateInfo cmd_buf_alloc_info{
+    const VkCommandBufferAllocateInfo cmd_buf_alloc_info{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = command_pool_,
         .commandBufferCount = 1
@@ -285,11 +290,11 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     };
     check(vkBeginCommandBuffer(cmd_buf_one_time, &cmd_buf_one_time_begin));
 
-    transition_image(cmd_buf_one_time, image->image, image->state,
+    transition_image(cmd_buf_one_time,
+                     *image,
                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                      VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                     VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                     VK_IMAGE_ASPECT_COLOR_BIT); // TODO: Add level count depending on image
+                     VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
     constexpr VkBufferImageCopy copy_region{
         .bufferOffset = 0,
@@ -299,16 +304,16 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     vkCmdCopyBufferToImage(
         cmd_buf_one_time,
         data_buffer.get(),
-        image->image,
+        image->image_,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &copy_region);
 
-    transition_image(cmd_buf_one_time, image->image, image->state,
+    transition_image(cmd_buf_one_time,
+                     *image,
                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                      VK_ACCESS_2_SHADER_READ_BIT,
-                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                     VK_IMAGE_ASPECT_COLOR_BIT);
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
     check(vkEndCommandBuffer(cmd_buf_one_time));
 
@@ -325,7 +330,7 @@ std::unique_ptr<Image> Context::load_texture(const std::filesystem::path &path, 
     vmaDestroyBuffer(allocator_, data_buffer.get(), data_buffer.get_allocation());
 
     // Register into bindless descriptor array, store resulting slot on the image
-    image->index = descriptor_registry_.register_texture(image->view, default_sampler_);
+    image->bindless_index_ = descriptor_registry_.register_texture(image->view_, default_sampler_);
 
     return image;
 }
@@ -370,9 +375,7 @@ void Context::acquire_command_buffer() {
 void Context::begin_rendering(const Attachment &attachment, const FrameBuffer &frame_buffer) {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
-    const VkImage current_swap_chain_image = swap_chain_.get_images()[image_index].image;
-    ImageState &current_swap_chain_image_state = swap_chain_.get_images()[image_index].state;
-    ImageState &current_depth_image_state = swap_chain_.get_depth_image().state;
+    auto &current_swap_chain_image = swap_chain_.get_images()[image_index];
 
     const auto cmd = frame_data_.command_buffers_[frame_index];
 
@@ -385,31 +388,27 @@ void Context::begin_rendering(const Attachment &attachment, const FrameBuffer &f
     check(vkBeginCommandBuffer(cmd, &cmd_begin_info));
 
     // for swap chain image
-    transition_image(cmd, current_swap_chain_image, current_swap_chain_image_state,
-                     VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+    transition_image(cmd, current_swap_chain_image, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     // for depth image
     if (attachment.has_depth()) {
-        transition_image(cmd, frame_buffer.depth_image_->image,
-                         current_depth_image_state,
-                         VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        transition_image(cmd, *frame_buffer.depth_image_, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                         VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
     }
 
     // rendering attachments
     std::array<VkRenderingAttachmentInfo, Attachment::kMaxColorAttachments> resolved_colors{};
     for (uint32_t i = 0; i < attachment.color_count(); ++i) {
         resolved_colors[i] = attachment.color(i);
-        resolved_colors[i].imageView = swap_chain_.get_images()[image_index].view;
+        resolved_colors[i].imageView = swap_chain_.get_images()[image_index].view_;
     }
 
     VkRenderingAttachmentInfo resolved_depth = attachment.depth();
     if (attachment.has_depth()) {
-        resolved_depth.imageView = frame_buffer.depth_image_->view;
+        resolved_depth.imageView = frame_buffer.depth_image_->view_;
     }
 
     const VkRenderingInfo rendering_info{
@@ -503,18 +502,17 @@ void Context::end_rendering() const {
 void Context::submit() {
     const uint32_t frame_index = frame_data_.frame_index_;
     const uint32_t image_index = frame_data_.image_index_;
-    const auto current_swap_chain_image = swap_chain_.get_images()[image_index].image;
-    auto &current_swap_chain_image_state = swap_chain_.get_images()[image_index].state;
+    auto &current_swap_chain_image = swap_chain_.get_images()[image_index];
 
     const auto cmd = frame_data_.command_buffers_[frame_index];
-
     auto swap_chain = swap_chain_.get();
 
     // transition to present
-    transition_image(cmd, current_swap_chain_image, current_swap_chain_image_state,
+    transition_image(cmd,
+                     current_swap_chain_image,
                      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                      0,
-                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     check(vkEndCommandBuffer(cmd));
 
@@ -564,7 +562,7 @@ void Context::deinit() {
         vkDestroySemaphore(device_, frame_data_.render_complete_semaphores_[i], nullptr);
     }
     for (auto i = 0; i < swap_chain_.get_images().size(); ++i) {
-        vkDestroyImageView(device_, swap_chain_.get_images()[i].view, nullptr);
+        vkDestroyImageView(device_, swap_chain_.get_images()[i].view_, nullptr);
     }
 
     // destroy texture registry
@@ -583,10 +581,14 @@ void Context::destroy_pipeline(const VkPipelineLayout layout, const VkPipeline p
     vkDestroyPipeline(device_, pipeline, nullptr);
 }
 
-void Context::destroy_image(const Image &image) const {
-    vkDestroyImageView(device_, image.view, nullptr);
-    // TODO: Destroy sampler if have per image sampler
-    vmaDestroyImage(allocator_, image.image, image.allocation);
+void Context::destroy_image(Image &image) const {
+    if (image.view_ != VK_NULL_HANDLE) {
+        vkDestroyImageView(device_, image.view_, nullptr);
+    }
+    if (image.image_ != VK_NULL_HANDLE && image.allocation_ != VK_NULL_HANDLE) {
+        vmaDestroyImage(allocator_, image.image_, image.allocation_);
+    }
+    image = Image{};
 }
 
 void Context::destory_shader(const VkShaderModule shader_module) const {
@@ -642,44 +644,35 @@ void Context::create_frame_resources() {
 }
 
 void Context::transition_image(const VkCommandBuffer cmd,
-                               const VkImage image,
-                               ImageState &state,
+                               Image &image,
                                const VkImageLayout new_layout,
                                const VkAccessFlags2 new_access,
-                               const VkPipelineStageFlags2 new_stage,
-                               const VkImageAspectFlags aspect,
-                               const uint32_t level_count,
-                               const uint32_t layer_count,
-                               const uint32_t base_mip_level) {
-    if (state.layout == new_layout && state.access == new_access) {
-        return;
-    }
-
-    VkImageMemoryBarrier2 barrier{
+                               const VkPipelineStageFlags2 new_stage) {
+    const VkImageMemoryBarrier2 barrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = state.stage,
-        .srcAccessMask = state.access,
+        .srcStageMask = image.state_.stage_,
+        .srcAccessMask = image.state_.access_,
         .dstStageMask = new_stage,
         .dstAccessMask = new_access,
-        .oldLayout = state.layout,
+        .oldLayout = image.state_.layout_,
         .newLayout = new_layout,
-        .image = image,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image.image_,
         .subresourceRange{
-            .aspectMask = aspect,
-            .baseMipLevel = base_mip_level,
-            .levelCount = level_count,
-            .baseArrayLayer = 0,
-            .layerCount = layer_count
+            .aspectMask = image.aspect_,
+            .levelCount = image.mip_levels_,
+            .layerCount = image.array_layers_,
         }
     };
     const VkDependencyInfo dep_info{
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &barrier
+        .pImageMemoryBarriers = &barrier,
     };
     vkCmdPipelineBarrier2(cmd, &dep_info);
 
-    state = {new_layout, new_access, new_stage};
+    image.state_ = ImageState{new_layout, new_access, new_stage};
 }
 
 void Context::create_default_sampler() {

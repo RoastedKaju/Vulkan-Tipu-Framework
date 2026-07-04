@@ -46,79 +46,25 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
 
     // copy the image handles back to our image wrapper
     for (uint32_t i = 0; i < image_count; ++i) {
-        swap_chain_images_[i].image = images[i];
-        swap_chain_images_[i].format = swap_chain_format_;
-        swap_chain_images_[i].aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-        swap_chain_images_[i].width = swap_chain_extent.width;
-        swap_chain_images_[i].height = swap_chain_extent.height;
+        swap_chain_images_[i].image_ = images[i];
+        swap_chain_images_[i].format_ = swap_chain_format_;
+        swap_chain_images_[i].aspect_ = VK_IMAGE_ASPECT_COLOR_BIT;
+        swap_chain_images_[i].width_ = swap_chain_extent.width;
+        swap_chain_images_[i].height_ = swap_chain_extent.height;
     }
 
     for (auto i = 0; i < image_count; ++i) {
         VkImageViewCreateInfo image_view_create_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = swap_chain_images_[i].image,
+            .image = swap_chain_images_[i].image_,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = swap_chain_format_,
-            .subresourceRange = {.aspectMask = swap_chain_images_[i].aspect, .levelCount = 1, .layerCount = 1}
+            .subresourceRange = {.aspectMask = swap_chain_images_[i].aspect_, .levelCount = 1, .layerCount = 1}
         };
-        check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_images_[i].view));
+        check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_images_[i].view_));
     }
 
     std::printf("Swap-chain created.\n");
-}
-
-void SwapChain::setup_depth_attachment(const Context *context) {
-    const auto physical_device = context->physical_device_;
-    const auto device = context->device_;
-    const auto window_size = context->window_size_;
-
-    // ReSharper disable once CppTooWideScopeInitStatement
-    std::vector<VkFormat> depth_format_list{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
-    // ReSharper disable once CppLocalVariableMayBeConst
-    for (VkFormat &format: depth_format_list) {
-        VkFormatProperties2 format_properties{.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
-        vkGetPhysicalDeviceFormatProperties2(physical_device, format, &format_properties);
-        if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-            depth_image_.format = format;
-            break;
-        }
-    }
-
-    assert(depth_image_.format != VK_FORMAT_UNDEFINED && "Depth format is undefined.\n");
-    const VkImageCreateInfo depth_image_create_info{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = depth_image_.format,
-        .extent{
-            .width = static_cast<uint32_t>(window_size.x), .height = static_cast<uint32_t>(window_size.y), .depth = 1
-        },
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-    };
-    constexpr VmaAllocationCreateInfo depth_allocation_create_info{
-        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
-    };
-    check(vmaCreateImage(
-        context->allocator_,
-        &depth_image_create_info,
-        &depth_allocation_create_info,
-        &depth_image_.image,
-        &depth_image_allocation_, nullptr));
-    const VkImageViewCreateInfo depth_view_create_info{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = depth_image_.image,
-        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = depth_image_.format,
-        .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}
-    };
-    check(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_.view));
-
-    std::printf("Depth attachment setup.\n");
 }
 
 void SwapChain::recreate_swap_chain(Context *context) {
@@ -153,7 +99,7 @@ void SwapChain::recreate_swap_chain(Context *context) {
     check(vkCreateSwapchainKHR(context->device_, &swap_chain_create_info, nullptr, &swap_chain_));
     // destroy old image views
     for (auto i = 0; i < swap_chain_images_.size(); i++) {
-        vkDestroyImageView(context->device_, swap_chain_images_[i].view, nullptr);
+        vkDestroyImageView(context->device_, swap_chain_images_[i].view_, nullptr);
     }
 
     uint32_t image_count{0};
@@ -164,24 +110,24 @@ void SwapChain::recreate_swap_chain(Context *context) {
 
     // copy the image handles back to our image wrapper
     for (uint32_t i = 0; i < image_count; ++i) {
-        swap_chain_images_[i].image = images[i];
-        swap_chain_images_[i].format = swap_chain_format_;
-        swap_chain_images_[i].aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-        swap_chain_images_[i].width = context->window_size_.x;
-        swap_chain_images_[i].height = context->window_size_.y;
-        swap_chain_images_[i].state = ImageState{};
+        swap_chain_images_[i].image_ = images[i];
+        swap_chain_images_[i].format_ = swap_chain_format_;
+        swap_chain_images_[i].aspect_ = VK_IMAGE_ASPECT_COLOR_BIT;
+        swap_chain_images_[i].width_ = context->window_size_.x;
+        swap_chain_images_[i].height_ = context->window_size_.y;
+        swap_chain_images_[i].state_ = ImageState{};
     }
 
     // create new views
     for (auto i = 0; i < image_count; ++i) {
         VkImageViewCreateInfo image_view_create_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = swap_chain_images_[i].image,
+            .image = swap_chain_images_[i].image_,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = swap_chain_format_,
-            .subresourceRange = {.aspectMask = swap_chain_images_[i].aspect, .levelCount = 1, .layerCount = 1}
+            .subresourceRange = {.aspectMask = swap_chain_images_[i].aspect_, .levelCount = 1, .layerCount = 1}
         };
-        check(vkCreateImageView(context->device_, &image_view_create_info, nullptr, &swap_chain_images_[i].view));
+        check(vkCreateImageView(context->device_, &image_view_create_info, nullptr, &swap_chain_images_[i].view_));
     }
 
     // destroy sync objects
@@ -194,13 +140,6 @@ void SwapChain::recreate_swap_chain(Context *context) {
         check(vkCreateSemaphore(context->device_, &semaphore_create_info, nullptr, &semaphore));
     }
 
-    const auto device = context->device_;
-    const auto allocator = context->allocator_;
-
     // destroy old swap chain, depth image and view
-    vkDestroySwapchainKHR(device, swap_chain_create_info.oldSwapchain, nullptr);
-    vmaDestroyImage(allocator, depth_image_.image, depth_image_.allocation);
-    vkDestroyImageView(device, depth_image_.view, nullptr);
-    // set state back to default
-    depth_image_.state = ImageState{};
+    vkDestroySwapchainKHR(context->device_, swap_chain_create_info.oldSwapchain, nullptr);
 }

@@ -92,7 +92,7 @@ public:
 
     void destroy_pipeline(VkPipelineLayout layout, VkPipeline pipeline) const;
 
-    void destroy_image(const Image &image) const;
+    void destroy_image(Image &image) const;
 
     void destory_shader(VkShaderModule shader_module) const;
 
@@ -122,15 +122,10 @@ private:
     void create_frame_resources();
 
     static void transition_image(VkCommandBuffer cmd,
-                                 VkImage image,
-                                 ImageState &state,
+                                 Image &image,
                                  VkImageLayout new_layout,
                                  VkAccessFlags2 new_access,
-                                 VkPipelineStageFlags2 new_stage,
-                                 VkImageAspectFlags aspect,
-                                 uint32_t level_count = 1,
-                                 uint32_t layer_count = 1,
-                                 uint32_t base_mip_level = 0);
+                                 VkPipelineStageFlags2 new_stage);
 
     void create_default_sampler();
 
