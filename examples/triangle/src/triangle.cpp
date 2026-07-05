@@ -7,7 +7,9 @@
 #include "utils.h"
 #include "shader.h"
 #include "pipeline.h"
-#include "texture_descriptor_set.h"
+
+constexpr uint32_t kWidth = 1280u;
+constexpr uint32_t kHeight = 720u;
 
 int main(int argc, char *argv[]) {
     Config config{
@@ -21,39 +23,33 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("Triangle", 800u, 600u);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("Triangle", kWidth, kHeight);
 
     // shaders
     const VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
-                                                                    "assets/shaders/triangle_vert.glsl",
+                                                                    "assets/shaders/triangle.vert.glsl",
                                                                     shaderc_vertex_shader);
     const VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(),
-                                                                    "assets/shaders/triangle_frag.glsl",
+                                                                    "assets/shaders/triangle.frag.glsl",
                                                                     shaderc_fragment_shader);
 
-    // texture descriptor set
-    TextureDescriptorSet descriptor_set{};
-    descriptor_set.create(ctx->get_device(), 64);
-
-    // create pipeline layout
+    // pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
-    pipeline_layout_desc.add_descriptor_set_layout(descriptor_set.layout());
-    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress));
     const VkPipelineLayout pipeline_layout = pipeline_layout_desc.build(ctx.get());
 
-    // create pipeline
+    // pipeline
     PipelineBuilder pipeline_builder{};
     pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, vert_shader);
     pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, frag_shader);
     pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipeline_builder.set_viewport(1, 1, true);
-    pipeline_builder.set_rasterization(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipeline_builder.set_rasterization(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
     pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
     pipeline_builder.set_color_blend(1, 0xF);
     const VkPipeline pipeline = pipeline_builder.build(ctx.get(),
-                                                       pipeline_layout,
-                                                       {ctx->get_swap_chain().get_format()},
-                                                       VK_FORMAT_UNDEFINED);
+                                                 pipeline_layout,
+                                                 {ctx->get_swap_chain().get_format()},
+                                                 VK_FORMAT_UNDEFINED);
 
     bool quit = false;
 
@@ -67,7 +63,7 @@ int main(int argc, char *argv[]) {
 
         ctx->acquire_command_buffer();
         {
-            // attachments
+            // Attachments
             Attachment scene_pass{};
             scene_pass.add_color(
                 VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -75,18 +71,33 @@ int main(int argc, char *argv[]) {
                 VK_ATTACHMENT_STORE_OP_STORE,
                 {0.0f, 0.0f, 0.0f, 1.0f});
 
+            // frame buffer
             FrameBuffer frame_buffer{};
+            frame_buffer.color_images_[0] = ctx->get_current_swap_chain_image();
 
             ctx->begin_rendering(scene_pass, frame_buffer);
             {
                 ctx->bind_pipeline(pipeline);
-                ctx->bind_descriptor_set(pipeline_layout, descriptor_set.get());
                 ctx->draw(3);
             }
             ctx->end_rendering();
         }
         ctx->submit();
+
+        if (ctx->get_swap_chain().is_swap_chain_dirty()) {
+            ctx->recreate_swap_chain();
+        }
     }
+
+    // waits for device to be idle
+    ctx->wait_idle();
+    // clean up resources
+    ctx->destroy_pipeline_layout(pipeline_layout);
+    ctx->destroy_pipeline(pipeline);
+    ctx->destory_shader(vert_shader);
+    ctx->destory_shader(frag_shader);
+    // destroy window, instance and device
+    ctx->destroy();
 
     return EXIT_SUCCESS;
 }

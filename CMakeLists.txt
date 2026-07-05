@@ -41,3 +41,4 @@ add_subdirectory(src/tipu)
 # Examples
 add_subdirectory(examples/triangle)
 add_subdirectory(examples/model)
+add_subdirectory(examples/wireframe)
