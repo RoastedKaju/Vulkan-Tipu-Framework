@@ -16,7 +16,11 @@ struct ShaderData {
     glm::mat4 view_;
     glm::mat4 model_;
     uint32_t tex_index_;
-    int wireframe_;
+};
+
+struct PushConstant {
+    VkDeviceAddress data_address;
+    uint32_t wireframe;
 };
 
 int main(int argc, char *argv[]) {
@@ -67,11 +71,8 @@ int main(int argc, char *argv[]) {
         .size = sizeof(ShaderData),
         .per_frame = true
     };
-    Buffer solid_uniform_buffer{};
-    solid_uniform_buffer.create(u_buf_desc);
-
-    Buffer wire_uniform_buffer{};
-    wire_uniform_buffer.create(u_buf_desc);
+    Buffer uniform_buffer{};
+    uniform_buffer.create(u_buf_desc);
 
     // load shaders
     [[maybe_unused]] const VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
@@ -97,7 +98,7 @@ int main(int argc, char *argv[]) {
     // create pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
     pipeline_layout_desc.add_descriptor_set_layout(ctx->get_texture_registry().get_layout());
-    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress));
+    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant));
     const VkPipelineLayout pipeline_layout = pipeline_layout_desc.build(ctx.get());
 
     // create solid pipeline
@@ -181,9 +182,8 @@ int main(int argc, char *argv[]) {
             transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
             shader_data.tex_index_ = camo_tex->bindless_index_;
-            shader_data.wireframe_ = false;
 
-            solid_uniform_buffer.update(&shader_data); // upload data to buffer on GPU
+            uniform_buffer.update(&shader_data); // upload data to buffer on GPU
 
             // attachments
             Attachment scene_pass{};
@@ -209,14 +209,15 @@ int main(int argc, char *argv[]) {
                 ctx->bind_descriptor_set(pipeline_layout, ctx->get_texture_registry().get_set());
                 ctx->bind_vertex_buffer(vertex_buffer.get());
                 ctx->bind_index_buffer(index_buffer.get());
-                ctx->cmd_push_constants(pipeline_layout, solid_uniform_buffer.address());
+                PushConstant pc{uniform_buffer.address(), 0};
+                ctx->cmd_push_constants(pipeline_layout, &pc, sizeof(pc), VK_SHADER_STAGE_VERTEX_BIT);
                 ctx->draw_indexed(loaded_mesh.data().indices_.size());
 
                 // draw wireframe
-                shader_data.wireframe_ = true;
-                wire_uniform_buffer.update(&shader_data);
+                uniform_buffer.update(&shader_data);
                 ctx->bind_pipeline(wire_pipeline);
-                ctx->cmd_push_constants(pipeline_layout, wire_uniform_buffer.address());
+                pc.wireframe = 1;
+                ctx->cmd_push_constants(pipeline_layout, &pc, sizeof(pc), VK_SHADER_STAGE_VERTEX_BIT);
                 ctx->draw_indexed(loaded_mesh.data().indices_.size());
             }
             ctx->end_rendering();
@@ -237,8 +238,7 @@ int main(int argc, char *argv[]) {
     // clean up resources
     vertex_buffer.destroy();
     index_buffer.destroy();
-    solid_uniform_buffer.destroy();
-    wire_uniform_buffer.destroy();
+    uniform_buffer.destroy();
     ctx->destroy_pipeline_layout(pipeline_layout);
     ctx->destroy_pipeline(solid_pipeline);
     ctx->destroy_pipeline(wire_pipeline);

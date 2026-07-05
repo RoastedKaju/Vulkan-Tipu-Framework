@@ -18,6 +18,10 @@ struct ShaderData {
     uint32_t tex_index_;
 };
 
+struct PushConstant {
+    VkDeviceAddress data_address;
+};
+
 int main(int argc, char *argv[]) {
     Config config{
         .app_name_ = "Model Viewer",
@@ -93,7 +97,7 @@ int main(int argc, char *argv[]) {
     // create pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
     pipeline_layout_desc.add_descriptor_set_layout(ctx->get_texture_registry().get_layout());
-    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress));
+    pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant));
     const VkPipelineLayout pipeline_layout = pipeline_layout_desc.build(ctx.get());
 
     // create pipeline
@@ -189,7 +193,8 @@ int main(int argc, char *argv[]) {
                 ctx->bind_descriptor_set(pipeline_layout, ctx->get_texture_registry().get_set());
                 ctx->bind_vertex_buffer(vertex_buffer.get());
                 ctx->bind_index_buffer(index_buffer.get());
-                ctx->cmd_push_constants(pipeline_layout, uniform_buffer.address());
+                PushConstant pc{.data_address = uniform_buffer.address()};
+                ctx->cmd_push_constants(pipeline_layout, &pc, sizeof(pc), VK_SHADER_STAGE_VERTEX_BIT);
                 ctx->draw_indexed(loaded_mesh.data().indices_.size());
             }
             ctx->end_rendering();

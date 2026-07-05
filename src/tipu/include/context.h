@@ -7,7 +7,6 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
-#include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -73,7 +72,11 @@ public:
 
     void bind_index_buffer(VkBuffer buffer) const;
 
-    void cmd_push_constants(VkPipelineLayout pipeline_layout, VkDeviceAddress address) const;
+    void cmd_push_constants(VkPipelineLayout pipeline_layout,
+                            const void *data,
+                            uint32_t size,
+                            VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL,
+                            uint32_t offset = 0) const;
 
     void draw_indexed(uint32_t index_count) const;
 
@@ -116,7 +119,8 @@ public:
     SDL_Window *get_window() const { return window_; }
     glm::ivec2 get_window_size() const { return window_size_; }
 
-private:
+private
+:
     bool create_instance(const char *app_name = "default");
 
     bool setup_device(uint32_t device_index = 0);

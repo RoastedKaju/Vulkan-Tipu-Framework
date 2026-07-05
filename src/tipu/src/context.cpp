@@ -5,11 +5,12 @@
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 #define VMA_IMPLEMENTATION
+// ReSharper disable once CppUnusedIncludeDirective
 #include <vma/vk_mem_alloc.h>
+#include <stb_image.h>
 
 #include "utils.h"
 #include "buffer.h"
-#include "stb_image.h"
 
 // debug callback
 // ReSharper disable once CppParameterMayBeConst
@@ -495,14 +496,14 @@ void Context::bind_index_buffer(const VkBuffer buffer) const {
     vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
-void Context::cmd_push_constants(const VkPipelineLayout pipeline_layout, const VkDeviceAddress address) const {
+void Context::cmd_push_constants(const VkPipelineLayout pipeline_layout,
+                                 const void *data,
+                                 const uint32_t size,
+                                 const VkShaderStageFlags stage_flags,
+                                 const uint32_t offset) const {
     const uint32_t frame_index = frame_data_.frame_index_;
     const auto cmd = frame_data_.command_buffers_[frame_index];
-    vkCmdPushConstants(cmd,
-                       pipeline_layout,
-                       VK_SHADER_STAGE_VERTEX_BIT,
-                       0,
-                       sizeof(VkDeviceAddress), &address);
+    vkCmdPushConstants(cmd, pipeline_layout, stage_flags, offset, size, data);
 }
 
 void Context::draw_indexed(const uint32_t index_count) const {
