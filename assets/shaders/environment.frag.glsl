@@ -18,5 +18,8 @@ void main() {
     vec3 N = normalize(inNormal);
     vec3 R = reflect(I, N);
 
-    outColor = vec4(texture(bindless_cubemaps[nonuniformEXT(inCubemapIndex)], R).rgb, 1.0);
+    vec3 reflection = texture(bindless_cubemaps[nonuniformEXT(inCubemapIndex)], R).rgb;
+    reflection *= vec3(0.75, 0.75, 1.0);
+
+    outColor = vec4(reflection, 1.0);
 }

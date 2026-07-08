@@ -142,6 +142,9 @@ int main(int argc, char *argv[]) {
             if (event.type == SDL_EVENT_QUIT) {
                 quit = true;
             }
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+                quit = true;
+            }
         }
 
         // update shader data
@@ -194,7 +197,7 @@ int main(int argc, char *argv[]) {
                 ctx->bind_vertex_buffer(vertex_buffer.get());
                 ctx->bind_index_buffer(index_buffer.get());
                 PushConstant pc{.data_address = uniform_buffer.address()};
-                ctx->cmd_push_constants(pipeline_layout, &pc, sizeof(pc), VK_SHADER_STAGE_VERTEX_BIT);
+                ctx->cmd_push_constants(pipeline_layout, &pc);
                 ctx->draw_indexed(loaded_mesh.data().indices_.size());
             }
             ctx->end_rendering();

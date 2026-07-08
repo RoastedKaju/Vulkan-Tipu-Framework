@@ -59,6 +59,9 @@ int main(int argc, char *argv[]) {
             if (event.type == SDL_EVENT_QUIT) {
                 quit = true;
             }
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+                quit = true;
+            }
         }
 
         ctx->acquire_command_buffer();

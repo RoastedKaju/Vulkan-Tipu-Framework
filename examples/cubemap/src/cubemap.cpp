@@ -90,15 +90,24 @@ int main(int argc, char *argv[]) {
 
     // load texture
     std::unique_ptr<Image> camo_tex = ctx->load_texture("assets/textures/camo.jpg");
+    // std::unique_ptr<Image> sky_tex = ctx->load_cubemap(
+    //     {
+    //         "assets/textures/skybox/right.jpg",
+    //         "assets/textures/skybox/left.jpg",
+    //         "assets/textures/skybox/top.jpg",
+    //         "assets/textures/skybox/bottom.jpg",
+    //         "assets/textures/skybox/front.jpg",
+    //         "assets/textures/skybox/back.jpg",
+    //     });
     std::unique_ptr<Image> sky_tex = ctx->load_cubemap(
-        {
-            "assets/textures/skybox/right.jpg",
-            "assets/textures/skybox/left.jpg",
-            "assets/textures/skybox/top.jpg",
-            "assets/textures/skybox/bottom.jpg",
-            "assets/textures/skybox/front.jpg",
-            "assets/textures/skybox/back.jpg",
-        });
+    {
+        "assets/textures/farm/right.png",
+        "assets/textures/farm/left.png",
+        "assets/textures/farm/top.png",
+        "assets/textures/farm/bottom.png",
+        "assets/textures/farm/front.png",
+        "assets/textures/farm/back.png",
+    });
 
     // buffers for model
     const VkDeviceSize v_buf_size = sizeof(Vertex) * loaded_mesh.data().vertices_.size();
@@ -270,7 +279,7 @@ int main(int argc, char *argv[]) {
             transform = glm::rotate(transform, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
             transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
-            // shader_data.bindless_texture_index_ = camo_tex->bindless_index_;
+            shader_data.bindless_texture_index_ = camo_tex->bindless_index_;
             shader_data.bindless_cube_index_ = sky_tex->bindless_index_;
             uniform_buffer.update(&shader_data);
 
