@@ -75,13 +75,13 @@ struct Camera {
 
 int main(int argc, char *argv[]) {
     Config config{
-        .app_name_ = "Model Viewer",
+        .app_name_ = "Cubemap",
         .present_mode_ = VK_PRESENT_MODE_FIFO_KHR,
         .enable_validation_ = true
     };
     const auto ctx = std::make_unique<Context>(config);
     ctx->initialize();
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("Model Viewer", kWidth, kHeight);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("Cubemap Example", kWidth, kHeight);
     SDL_SetWindowRelativeMouseMode(window, true);
 
     // load model

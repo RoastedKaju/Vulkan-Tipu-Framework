@@ -25,20 +25,20 @@ struct PushConstant {
 
 int main(int argc, char *argv[]) {
     Config config{
-        .app_name_ = "Model Viewer",
+        .app_name_ = "Wireframe",
         .present_mode_ = VK_PRESENT_MODE_FIFO_KHR,
         .enable_validation_ = true
     };
     const auto ctx = std::make_unique<Context>(config);
     ctx->initialize();
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("Model Viewer", kWidth, kHeight);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("Wireframe Example", kWidth, kHeight);
 
     // load model
     Mesh loaded_mesh{};
     loaded_mesh.load_mesh(("assets/models/gun.glb"));
 
     // load texture
-    std::unique_ptr<Image> camo_tex = ctx->load_texture("assets/textures/gun.jpg");
+    std::unique_ptr<Image> camo_tex = ctx->load_texture("assets/textures/gun/color.png");
 
     // buffers for model
     const VkDeviceSize v_buf_size = sizeof(Vertex) * loaded_mesh.data().vertices_.size();
@@ -181,8 +181,10 @@ int main(int argc, char *argv[]) {
             auto transform = glm::mat4(1.0f);
 
             transform = glm::translate(transform, glm::vec3(0.0f, 0.0f, 0.0f));
-            transform = glm::rotate(transform, glm::radians(45.0f * time), glm::vec3(0.0f, 1.0f, 0.0f));
-            transform = glm::scale(transform, glm::vec3(0.03f, 0.03f, 0.03f));
+            transform = glm::rotate(transform, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            transform = glm::rotate(transform, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            transform = glm::rotate(transform, glm::radians(20.0f * time), glm::vec3(0.0f, 0.0f, 1.0f));
+            transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
             shader_data.tex_index_ = camo_tex->bindless_index_;
 

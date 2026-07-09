@@ -37,6 +37,7 @@ layout (location = 6) out flat uint outCubeIndex;
 layout (location = 7) out vec3 outTangent;
 layout (location = 8) out vec3 outBitangent;
 layout (location = 9) out vec3 outNormal;
+layout (location = 10) out vec3 outCameraPos;
 
 void main() {
     ShaderData sceneData = ShaderDataRef(address).data;
@@ -64,6 +65,7 @@ void main() {
     outMetallicIndex = sceneData.metallic_index;
     outNormalIndex = sceneData.normal_index;
     outCubeIndex = sceneData.cubemap_index;
+    outCameraPos = sceneData.camera;
 
     // Final clip-space position
     gl_Position = sceneData.projection * sceneData.view * worldPos;

@@ -77,34 +77,34 @@ struct Camera {
 
 int main(int argc, char *argv[]) {
     Config config{
-        .app_name_ = "Model Viewer",
+        .app_name_ = "PBR",
         .present_mode_ = VK_PRESENT_MODE_FIFO_KHR,
         .enable_validation_ = true
     };
     const auto ctx = std::make_unique<Context>(config);
     ctx->initialize();
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("Model Viewer", kWidth, kHeight);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("PBR Example", kWidth, kHeight);
     SDL_SetWindowRelativeMouseMode(window, true);
 
     // load model
     Mesh loaded_mesh{};
-    loaded_mesh.load_mesh(("assets/models/rifle.glb"));
+    loaded_mesh.load_mesh(("assets/models/gun.glb"));
 
     // load textures
-    std::unique_ptr<Image> albedo_tex = ctx->load_texture("assets/textures/rifle/color.png",
+    std::unique_ptr<Image> albedo_tex = ctx->load_texture("assets/textures/gun/color.png",
                                                           VK_FORMAT_R8G8B8A8_SRGB);
-    std::unique_ptr<Image> metallic_tex = ctx->load_texture("assets/textures/rifle/metallic.png",
+    std::unique_ptr<Image> metallic_tex = ctx->load_texture("assets/textures/gun/metallic.png",
                                                             VK_FORMAT_R8G8B8A8_UNORM);
-    std::unique_ptr<Image> normal_tex = ctx->load_texture("assets/textures/rifle/normal.png",
+    std::unique_ptr<Image> normal_tex = ctx->load_texture("assets/textures/gun/normal.png",
                                                           VK_FORMAT_R8G8B8A8_UNORM);
     std::unique_ptr<Image> sky_tex = ctx->load_cubemap(
         {
-            "assets/textures/skybox/right.jpg",
-            "assets/textures/skybox/left.jpg",
-            "assets/textures/skybox/top.jpg",
-            "assets/textures/skybox/bottom.jpg",
-            "assets/textures/skybox/front.jpg",
-            "assets/textures/skybox/back.jpg",
+            "assets/textures/farm/right.png",
+            "assets/textures/farm/left.png",
+            "assets/textures/farm/top.png",
+            "assets/textures/farm/bottom.png",
+            "assets/textures/farm/front.png",
+            "assets/textures/farm/back.png",
         });
 
     // buffers for model
@@ -275,7 +275,7 @@ int main(int argc, char *argv[]) {
             // gun draw
             auto transform = glm::mat4(1.0f);
             transform = glm::translate(transform, glm::vec3(0.0f, 0.0f, 0.0f));
-            transform = glm::rotate(transform, glm::radians(45.0f * time), glm::vec3(0.0f, 1.0f, 0.0f));
+            transform = glm::rotate(transform, glm::radians(45.0f * (time * 0.05f)), glm::vec3(0.0f, 1.0f, 0.0f));
             transform = glm::rotate(transform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
             transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
