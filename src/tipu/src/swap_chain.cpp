@@ -23,10 +23,16 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
 
     const auto device = context->device_;
 
+    // clamp min image count
+    uint32_t min_img_count = surface_capabilities.minImageCount + 1;
+    if (surface_capabilities.maxImageCount > 0) {
+        min_img_count = std::min(min_img_count, surface_capabilities.maxImageCount);
+    }
+
     const VkSwapchainCreateInfoKHR swap_chain_create_info{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = context->surface_,
-        .minImageCount = surface_capabilities.minImageCount,
+        .minImageCount = min_img_count,
         .imageFormat = swap_chain_format_,
         .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         .imageExtent{.width = swap_chain_extent.width, .height = swap_chain_extent.height},
@@ -64,6 +70,8 @@ void SwapChain::init_swap_chain(const Context *context, const VkFormat image_for
         check(vkCreateImageView(device, &image_view_create_info, nullptr, &swap_chain_images_[i].view_));
     }
 
+    surface_caps_ = surface_capabilities;
+
     std::printf("Swap-chain created.\n");
 }
 
@@ -78,10 +86,16 @@ void SwapChain::recreate_swap_chain(Context *context) {
                                                     context->surface_,
                                                     &surface_capabilities));
 
+    // clamp min image count
+    uint32_t min_img_count = surface_capabilities.minImageCount + 1;
+    if (surface_capabilities.maxImageCount > 0) {
+        min_img_count = std::min(min_img_count, surface_capabilities.maxImageCount);
+    }
+
     VkSwapchainCreateInfoKHR swap_chain_create_info{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = context->surface_,
-        .minImageCount = surface_capabilities.minImageCount,
+        .minImageCount = min_img_count,
         .imageFormat = swap_chain_format_,
         .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         .imageExtent{

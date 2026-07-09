@@ -105,11 +105,8 @@ public:
 
     Image *get_current_swap_chain_image();
 
-    /**
-     *
-     * @return number of maximum frames in flight
-     */
     VkDevice get_device() const { return device_; }
+    VkInstance get_instance() const { return instance_; }
     VkPhysicalDevice get_physical_device() const { return physical_device_; }
     SwapChain &get_swap_chain() { return swap_chain_; }
     uint32_t get_max_frame_count() const { return frame_data_.max_frames_in_flight_; }
@@ -121,7 +118,10 @@ public:
     VmaAllocator get_allocator() const { return allocator_; }
     VkCommandPool get_command_pool() const { return command_pool_; }
     VkQueue get_queue() const { return queue_; }
+    uint32_t get_family_index() const { return queue_family_index_; }
     VkSampler get_default_sampler() const { return default_sampler_; }
+
+    VkCommandBuffer get_current_cmd_buf() const;
 
 private:
     bool create_instance(const char *app_name = "default");

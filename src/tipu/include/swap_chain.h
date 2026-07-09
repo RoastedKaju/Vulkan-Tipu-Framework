@@ -34,11 +34,12 @@ public:
 
     void mark_swap_chain_dirty() { is_swap_chain_dirty_ = true; }
     bool is_swap_chain_dirty() const { return is_swap_chain_dirty_; }
+    VkSurfaceCapabilitiesKHR get_surface_capabilities() const { return surface_caps_; }
 
 private:
     bool is_swap_chain_dirty_{false};
     VkSwapchainKHR swap_chain_{VK_NULL_HANDLE};
     VkFormat swap_chain_format_{VK_FORMAT_R8G8B8A8_SRGB};
     std::vector<Image> swap_chain_images_;
-
+    VkSurfaceCapabilitiesKHR surface_caps_;
 };

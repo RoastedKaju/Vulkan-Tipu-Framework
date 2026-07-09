@@ -41,6 +41,11 @@ bool Context::initialize() {
     return true;
 }
 
+VkCommandBuffer Context::get_current_cmd_buf() const {
+    const uint32_t frame_index = frame_data_.frame_index_;
+    return frame_data_.command_buffers_[frame_index];
+}
+
 bool Context::create_instance(const char *app_name) {
     VkApplicationInfo app_info{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,

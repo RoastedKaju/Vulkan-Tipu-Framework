@@ -8,12 +8,12 @@ target_sources(Tipu PRIVATE ${SRC_FILES} ${HED_FILES})
 target_include_directories(Tipu PUBLIC "include")
 
 target_link_libraries(Tipu
-#        PUBLIC Vulkan::Vulkan
         PUBLIC SDL3::SDL3
         PUBLIC volk
         PUBLIC GPUOpen::VulkanMemoryAllocator
         PUBLIC glm::glm
         PUBLIC TinyGLTF
+        PUBLIC ImGUI
 )
 
 target_compile_definitions(Tipu PUBLIC VK_NO_PROTOTYPES)

@@ -70,9 +70,6 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
     const auto norm_it = primitive.attributes.find("NORMAL");
     const auto uv_it = primitive.attributes.find("TEXCOORD_0");
     const auto tangent_it = primitive.attributes.find("TANGENT");
-    if (tangent_it == primitive.attributes.end()) {
-        std::cout << "Mesh has no tangents!\n";
-    }
 
     const auto &pos_accessor = model.accessors[pos_it->second];
 
@@ -81,10 +78,6 @@ inline MeshData load_mesh_data(const tinygltf::Model &model, const tinygltf::Pri
     const float *normals = nullptr;
     const float *uvs = nullptr;
     const float *tangents = nullptr;
-
-    if (tangent_it == primitive.attributes.end()) {
-        std::cout << "Mesh has no tangents!\n";
-    }
 
     if (norm_it != primitive.attributes.end()) {
         normals = reinterpret_cast<const float *>(get_accessor_data(model, model.accessors[norm_it->second]));
