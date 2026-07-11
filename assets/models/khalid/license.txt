@@ -1,0 +1,11 @@
+Model Information:
+* title:	Al- Khalid-I (War Thunder)
+* source:	https://sketchfab.com/3d-models/al-khalid-i-war-thunder-b4c1fa65ea4843ad83e9222646d96f2c
+* author:	KojfDiscord (https://sketchfab.com/KojfDiscord)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Al- Khalid-I (War Thunder)" (https://sketchfab.com/3d-models/al-khalid-i-war-thunder-b4c1fa65ea4843ad83e9222646d96f2c) by KojfDiscord (https://sketchfab.com/KojfDiscord) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

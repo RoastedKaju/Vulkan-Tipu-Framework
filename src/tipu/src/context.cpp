@@ -6,6 +6,7 @@
 #include <volk.h>
 #define VMA_IMPLEMENTATION
 // ReSharper disable once CppUnusedIncludeDirective
+#include <glm/gtc/type_ptr.hpp>
 #include <vma/vk_mem_alloc.h>
 
 #include "utils.h"
@@ -466,6 +467,100 @@ std::unique_ptr<Image> Context::load_texture_memory(const unsigned char *buffer_
             .height = static_cast<uint32_t>(texture_desc.dimension_[1]), .depth = 1
         }
     };
+    vkCmdCopyBufferToImage(
+        cmd_buf_one_time,
+        data_buffer.get(),
+        image->image_,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &copy_region);
+
+    transition_image(cmd_buf_one_time,
+                     *image,
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VK_ACCESS_2_SHADER_READ_BIT,
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+
+    check(vkEndCommandBuffer(cmd_buf_one_time));
+
+    const VkSubmitInfo one_time_submit_info{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd_buf_one_time
+    };
+    check(vkQueueSubmit(queue_, 1, &one_time_submit_info, fence_one_time));
+    check(vkWaitForFences(device_, 1, &fence_one_time, VK_TRUE, UINT64_MAX));
+
+    vkDestroyFence(device_, fence_one_time, nullptr);
+    vkFreeCommandBuffers(device_, command_pool_, 1, &cmd_buf_one_time);
+    vmaDestroyBuffer(allocator_, data_buffer.get(), data_buffer.get_allocation());
+
+    image->bindless_index_ = descriptor_registry_.register_texture(image->view_, default_sampler_);
+
+    return image;
+}
+
+std::unique_ptr<Image> Context::create_solid_texture(const glm::u8vec4 &color, const VkFormat format) {
+    constexpr uint32_t width = 1;
+    constexpr uint32_t height = 1;
+
+    const TextureDesc texture_desc{
+        .dimension_ = {width, height},
+        .depth_ = 1,
+        .mip_levels_ = 1,
+        .array_layers_ = 1,
+        .samples_ = VK_SAMPLE_COUNT_1_BIT,
+        .tiling_ = VK_IMAGE_TILING_OPTIMAL,
+        .usage_ = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .aspect_ = VK_IMAGE_ASPECT_COLOR_BIT,
+        .format_ = format,
+        .prefer_dedicated_alloc_ = false
+    };
+
+    auto image = create_texture(texture_desc);
+
+    constexpr VkDeviceSize data_size = width * height * 4; // 4 bytes
+    const BufferDesc buf_desc{
+        .context = this,
+        .usage_flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .size = data_size,
+        .per_frame = false
+    };
+    Buffer data_buffer{};
+    data_buffer.create(buf_desc);
+
+    data_buffer.update(glm::value_ptr(color));
+
+    constexpr VkFenceCreateInfo fence_one_time_create_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    VkFence fence_one_time{};
+    check(vkCreateFence(device_, &fence_one_time_create_info, nullptr, &fence_one_time));
+
+    VkCommandBuffer cmd_buf_one_time{};
+    const VkCommandBufferAllocateInfo cmd_buf_alloc_info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = command_pool_,
+        .commandBufferCount = 1
+    };
+    check(vkAllocateCommandBuffers(device_, &cmd_buf_alloc_info, &cmd_buf_one_time));
+
+    constexpr VkCommandBufferBeginInfo cmd_buf_one_time_begin{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    check(vkBeginCommandBuffer(cmd_buf_one_time, &cmd_buf_one_time_begin));
+
+    transition_image(cmd_buf_one_time,
+                     *image,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                     VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+
+    constexpr VkBufferImageCopy copy_region{
+        .bufferOffset = 0,
+        .imageSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+        .imageExtent{.width = width, .height = height, .depth = 1}
+    };
+
     vkCmdCopyBufferToImage(
         cmd_buf_one_time,
         data_buffer.get(),

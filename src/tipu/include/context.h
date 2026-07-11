@@ -65,6 +65,8 @@ public:
                                                uint32_t height,
                                                VkFormat format);
 
+    std::unique_ptr<Image> create_solid_texture(const glm::u8vec4 &color, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB);
+
     std::unique_ptr<Image> load_cubemap(const std::array<std::filesystem::path, 6> &paths);
 
     VkFormat get_device_depth_format() const;
@@ -182,7 +184,7 @@ private:
     FrameData frame_data_;
 
     VkSampler default_sampler_{VK_NULL_HANDLE};
-    VkSampleCountFlagBits msaa_samples_;
+    VkSampleCountFlagBits msaa_samples_{VK_SAMPLE_COUNT_1_BIT};
 
     friend class SwapChain;
     friend class Buffer;

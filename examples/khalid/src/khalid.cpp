@@ -14,16 +14,16 @@ constexpr uint32_t kHeight = 720u;
 struct ShaderData {
     glm::mat4 projection_;
     glm::mat4 view_;
-    glm::mat4 model_;
     glm::vec3 camera_;
-    uint32_t bindless_albedo_;
-    uint32_t bindless_metallic_;
-    uint32_t bindless_normal_;
     uint32_t bindless_cube_;
 };
 
 struct alignas(16) PushConstant {
+    glm::mat4 model_;
     VkDeviceAddress data_address;
+    uint32_t bindless_albedo_;
+    uint32_t bindless_metallic_;
+    uint32_t bindless_normal_;
 };
 
 struct Camera {
@@ -89,9 +89,6 @@ int main(int argc, char *argv[]) {
     // load model
     Model tank_model{};
     tank_model.load(ctx.get(), "assets/models/khalid/scene.gltf");
-    // tank_model.load(ctx.get(), "assets/models/toy.glb");
-
-    std::cout << "MESHES COUNT: " << tank_model.meshes().size() << std::endl;
 
     std::vector<MeshData> tank_meshes_data;
     std::vector<Buffer> vert_buffers;
@@ -132,8 +129,12 @@ int main(int argc, char *argv[]) {
             "assets/textures/farm/front.png",
             "assets/textures/farm/back.png",
         });
-    // default texture
-    std::unique_ptr<Image> default_tex = ctx->load_texture("assets/textures/camo.jpg");
+    // default textures
+    std::unique_ptr<Image> white_color = ctx->create_solid_texture(glm::u8vec4(255, 255, 255, 255),
+                                                                   VK_FORMAT_R8G8B8A8_SRGB);
+    std::unique_ptr<Image> flat_normal = ctx->create_solid_texture(glm::u8vec4(128, 128, 255, 255),
+                                                                   VK_FORMAT_R8G8B8A8_UNORM);
+    std::unique_ptr<Image> black_tex = ctx->create_solid_texture(glm::u8vec4(0, 50, 125, 255), VK_FORMAT_R8G8B8A8_UNORM);
 
     // per frame uniform buffer
     BufferDesc u_buf_desc{
@@ -314,6 +315,8 @@ int main(int argc, char *argv[]) {
                 // model
                 ctx->bind_pipeline(pipeline);
                 for (auto i = 0; i < tank_model.meshes().size(); ++i) {
+                    PushConstant pc{};
+                    pc.data_address = uniform_buffer.address();
                     const auto &mat = tank_model.meshes().at(i).material();
 
                     auto transform = glm::mat4(1.0f);
@@ -322,28 +325,27 @@ int main(int argc, char *argv[]) {
                                             glm::radians(45.0f * (time * 0.05f)), glm::vec3(0.0f, 1.0f, 0.0f));
                     transform = glm::rotate(transform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
-                    shader_data.model_ = transform;
-                    shader_data.bindless_albedo_ =
+                    pc.model_ = transform;
+                    pc.bindless_albedo_ =
                             mat->base_color_
                                 ? mat->base_color_->image_->bindless_index_
-                                : default_tex->bindless_index_;
+                                : white_color->bindless_index_;
 
-                    shader_data.bindless_normal_ =
+                    pc.bindless_normal_ =
                             mat->normal_
                                 ? mat->normal_->image_->bindless_index_
-                                : default_tex->bindless_index_;
+                                : flat_normal->bindless_index_;
 
-                    shader_data.bindless_metallic_ =
+                    pc.bindless_metallic_ =
                             mat->metallic_roughness_
                                 ? mat->metallic_roughness_->image_->bindless_index_
-                                : default_tex->bindless_index_;
+                                : black_tex->bindless_index_;
 
                     shader_data.bindless_cube_ = sky_tex->bindless_index_;
                     uniform_buffer.update(&shader_data);
 
                     ctx->bind_vertex_buffer(vert_buffers.at(i).get());
                     ctx->bind_index_buffer(index_buffers.at(i).get());
-                    PushConstant pc{.data_address = uniform_buffer.address()};
                     ctx->cmd_push_constants(pipeline_layout, &pc);
                     ctx->draw_indexed(tank_meshes_data.at(i).indices_.size());
                 }
@@ -380,7 +382,9 @@ int main(int argc, char *argv[]) {
     ctx->destroy_image(depth_texture.get());
     tank_model.destroy_textures();
     ctx->destroy_image(sky_tex.get());
-    ctx->destroy_image(default_tex.get());
+    ctx->destroy_image(white_color.get());
+    ctx->destroy_image(flat_normal.get());
+    ctx->destroy_image(black_tex.get());
     // destroy window, instance and device
     ctx->destroy();
 
