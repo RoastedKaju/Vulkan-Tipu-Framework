@@ -34,18 +34,15 @@ int main(int argc, char *argv[]) {
     [[maybe_unused]] SDL_Window *window = ctx->create_window("Wireframe Example", kWidth, kHeight);
 
     // load model
-    Model gun_model{};
-    gun_model.load(ctx.get(), "assets/models/gun.glb");
+    Model toy_model{};
+    toy_model.load(ctx.get(), "assets/models/toy.glb");
 
-    const auto gun_verts = gun_model.meshes().at(0).data().vertices_;
-    const auto gun_indices = gun_model.meshes().at(0).data().indices_;
-
-    // load texture
-    std::unique_ptr<Image> camo_tex = ctx->load_texture("assets/textures/gun/color.png");
+    const auto toy_verts = toy_model.meshes().at(0).data().vertices_;
+    const auto toy_indices = toy_model.meshes().at(0).data().indices_;
 
     // buffers for model
-    const VkDeviceSize v_buf_size = sizeof(Vertex) * gun_verts.size();
-    const VkDeviceSize i_buf_size = sizeof(uint32_t) * gun_indices.size();
+    const VkDeviceSize v_buf_size = sizeof(Vertex) * toy_verts.size();
+    const VkDeviceSize i_buf_size = sizeof(uint32_t) * toy_indices.size();
 
     // vertex buffer
     BufferDesc v_buf_desc{
@@ -55,7 +52,7 @@ int main(int argc, char *argv[]) {
     };
     Buffer vertex_buffer{};
     vertex_buffer.create(v_buf_desc);
-    vertex_buffer.update(gun_verts.data());
+    vertex_buffer.update(toy_verts.data());
 
     // index buffer
     BufferDesc i_buf_desc{
@@ -65,7 +62,7 @@ int main(int argc, char *argv[]) {
     };
     Buffer index_buffer{};
     index_buffer.create(i_buf_desc);
-    index_buffer.update(gun_indices.data());
+    index_buffer.update(toy_indices.data());
 
     // per frame uniform buffer
     BufferDesc u_buf_desc{
@@ -173,7 +170,7 @@ int main(int argc, char *argv[]) {
                                                    0.1f, 1000.0f);
         shader_data.projection_[1][1] *= -1.0f; // flip Y
 
-        shader_data.view_ = glm::lookAt(glm::vec3(0.0f, 1.0f, 15.0f),
+        shader_data.view_ = glm::lookAt(glm::vec3(0.0f, 1.0f, 25.0f),
                                         glm::vec3(0.0f, 0.0f, 0.0f),
                                         glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -189,7 +186,7 @@ int main(int argc, char *argv[]) {
             transform = glm::rotate(transform, glm::radians(20.0f * time), glm::vec3(0.0f, 0.0f, 1.0f));
             transform = glm::scale(transform, glm::vec3(1.0f, 1.0f, 1.0f));
             shader_data.model_ = transform;
-            shader_data.tex_index_ = camo_tex->bindless_index_;
+            shader_data.tex_index_ = toy_model.meshes()[0].material()->base_color_->image_->bindless_index_;
 
             uniform_buffer.update(&shader_data);
 
@@ -220,13 +217,13 @@ int main(int argc, char *argv[]) {
                 ctx->bind_index_buffer(index_buffer.get());
                 PushConstant pc{uniform_buffer.address(), 0};
                 ctx->cmd_push_constants(pipeline_layout, &pc);
-                ctx->draw_indexed(gun_indices.size());
+                ctx->draw_indexed(toy_indices.size());
 
                 // draw wireframe
                 ctx->bind_pipeline(wire_pipeline);
                 pc.wireframe_ = 1;
                 ctx->cmd_push_constants(pipeline_layout, &pc);
-                ctx->draw_indexed(gun_indices.size());
+                ctx->draw_indexed(toy_indices.size());
             }
             ctx->end_rendering();
         }
@@ -253,8 +250,7 @@ int main(int argc, char *argv[]) {
     ctx->destory_shader(vert_shader);
     ctx->destory_shader(frag_shader);
     ctx->destroy_image(depth_texture.get());
-    ctx->destroy_image(camo_tex.get());
-    gun_model.destroy_textures();
+    toy_model.destroy_textures();
     // destroy window, instance and device
     ctx->destroy();
 

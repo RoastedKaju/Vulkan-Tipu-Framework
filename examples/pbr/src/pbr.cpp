@@ -143,14 +143,14 @@ int main(int argc, char *argv[]) {
     };
     Buffer uniform_buffer{};
     uniform_buffer.create(u_buf_desc);
-    BufferDesc proc_u_buf_desc{
+    BufferDesc sky_u_buf_desc{
         .context = ctx.get(),
         .usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .size = sizeof(ShaderData),
         .per_frame = true
     };
-    Buffer proc_uniform_buffer{};
-    proc_uniform_buffer.create(proc_u_buf_desc);
+    Buffer sky_uniform_buffer{};
+    sky_uniform_buffer.create(sky_u_buf_desc);
 
     // load shaders
     [[maybe_unused]] const VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
@@ -333,7 +333,7 @@ int main(int argc, char *argv[]) {
             sky_shader_data.projection_ = shader_data.projection_;
             sky_shader_data.view_ = shader_data.view_;
             sky_shader_data.bindless_cube_ = sky_tex->bindless_index_;
-            proc_uniform_buffer.update(&sky_shader_data);
+            sky_uniform_buffer.update(&sky_shader_data);
 
             // 1st Pass
             Attachment scene_pass{};
@@ -358,10 +358,10 @@ int main(int argc, char *argv[]) {
 
             ctx->begin_rendering(scene_pass, frame_buffer);
             {
-                // draw procedural box
+                // sky
                 ctx->bind_pipeline(sky_pipeline);
                 ctx->bind_descriptor_set(pipeline_layout, ctx->get_texture_registry().get_set());
-                PushConstant proc_pc{.data_address_ = proc_uniform_buffer.address()};
+                PushConstant proc_pc{.data_address_ = sky_uniform_buffer.address()};
                 ctx->cmd_push_constants(pipeline_layout, &proc_pc);
                 ctx->draw(36);
 
@@ -379,8 +379,6 @@ int main(int argc, char *argv[]) {
                 ctx->draw_indexed(gun_indices.size());
             }
             ctx->end_rendering();
-
-            ctx->present(*offscreen_color.get());
 
             // 2nd Pass
             Attachment present_pass{};
@@ -428,7 +426,7 @@ int main(int argc, char *argv[]) {
     vertex_buffer.destroy();
     index_buffer.destroy();
     uniform_buffer.destroy();
-    proc_uniform_buffer.destroy();
+    sky_uniform_buffer.destroy();
     ctx->destroy_pipeline_layout(pipeline_layout);
     ctx->destroy_pipeline(pipeline);
     ctx->destroy_pipeline(sky_pipeline);

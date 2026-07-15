@@ -10,6 +10,7 @@
 
 constexpr uint32_t kWidth = 1280u;
 constexpr uint32_t kHeight = 720u;
+constexpr VkSampleCountFlagBits kMsaaSamples = VK_SAMPLE_COUNT_4_BIT;
 
 struct ShaderData {
     glm::mat4 projection_;
@@ -26,6 +27,10 @@ struct alignas(16) PushConstant {
     uint32_t bindless_normal_;
 };
 
+struct PresentPushConstant {
+    uint32_t color_;
+};
+
 struct Camera {
     glm::vec3 position_ = glm::vec3(0.0f, 0.0f, 10.0f);
     glm::vec3 front_ = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -33,11 +38,11 @@ struct Camera {
     glm::vec3 world_up_ = glm::vec3(0.0f, 1.0f, 0.0f);
     glm::vec3 right_ = glm::vec3(1.0f, 0.0f, 0.0f);
 
-    float yaw_ = -90.0f; // facing -Z initially
+    float yaw_ = -90.0f;
     float pitch_ = 0.0f;
 
-    float speed_ = 5.0f; // units per second
-    float sen_ = 0.1f; // degrees per pixel
+    float speed_ = 5.0f;
+    float sen_ = 0.1f;
 
     void update() {
         glm::vec3 new_front;
@@ -62,7 +67,7 @@ struct Camera {
 
     void process_mouse(const float xrel, const float yrel) {
         yaw_ += xrel * sen_;
-        pitch_ -= yrel * sen_; // inverted so mouse-up looks up
+        pitch_ -= yrel * sen_;
 
         if (pitch_ > 89.0f) pitch_ = 89.0f;
         if (pitch_ < -89.0f) pitch_ = -89.0f;
@@ -77,13 +82,13 @@ struct Camera {
 
 int main(int argc, char *argv[]) {
     Config config{
-        .app_name_ = "PBR",
+        .app_name_ = "Multi-Mesh",
         .present_mode_ = VK_PRESENT_MODE_FIFO_KHR,
         .enable_validation_ = true
     };
     const auto ctx = std::make_unique<Context>(config);
     ctx->initialize();
-    [[maybe_unused]] SDL_Window *window = ctx->create_window("PBR Example", kWidth, kHeight);
+    [[maybe_unused]] SDL_Window *window = ctx->create_window("Multi-Mesh Example", kWidth, kHeight);
     SDL_SetWindowRelativeMouseMode(window, true);
 
     // load model
@@ -134,7 +139,8 @@ int main(int argc, char *argv[]) {
                                                                    VK_FORMAT_R8G8B8A8_SRGB);
     std::unique_ptr<Image> flat_normal = ctx->create_solid_texture(glm::u8vec4(128, 128, 255, 255),
                                                                    VK_FORMAT_R8G8B8A8_UNORM);
-    std::unique_ptr<Image> black_tex = ctx->create_solid_texture(glm::u8vec4(0, 50, 125, 255), VK_FORMAT_R8G8B8A8_UNORM);
+    std::unique_ptr<Image> black_tex = ctx->create_solid_texture(glm::u8vec4(0, 50, 125, 255),
+                                                                 VK_FORMAT_R8G8B8A8_UNORM);
 
     // per frame uniform buffer
     BufferDesc u_buf_desc{
@@ -146,14 +152,14 @@ int main(int argc, char *argv[]) {
     Buffer uniform_buffer{};
     uniform_buffer.create(u_buf_desc);
 
-    BufferDesc proc_u_buf_desc{
+    BufferDesc sky_u_buf_desc{
         .context = ctx.get(),
         .usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .size = sizeof(ShaderData),
         .per_frame = true
     };
-    Buffer proc_uniform_buffer{};
-    proc_uniform_buffer.create(proc_u_buf_desc);
+    Buffer sky_uniform_buffer{};
+    sky_uniform_buffer.create(sky_u_buf_desc);
 
     // load shaders
     [[maybe_unused]] const VkShaderModule vert_shader = Shader::create_shader_module(ctx.get(),
@@ -162,12 +168,38 @@ int main(int argc, char *argv[]) {
     [[maybe_unused]] const VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(),
         "assets/shaders/pbr.frag.glsl",
         shaderc_fragment_shader);
-    [[maybe_unused]] const VkShaderModule proc_vert_shader = Shader::create_shader_module(ctx.get(),
+    [[maybe_unused]] const VkShaderModule sky_vert_shader = Shader::create_shader_module(ctx.get(),
         "assets/shaders/skybox.vert.glsl",
         shaderc_vertex_shader);
-    [[maybe_unused]] const VkShaderModule proc_frag_shader = Shader::create_shader_module(ctx.get(),
+    [[maybe_unused]] const VkShaderModule sky_frag_shader = Shader::create_shader_module(ctx.get(),
         "assets/shaders/skybox.frag.glsl",
         shaderc_fragment_shader);
+    const VkShaderModule present_vert = Shader::create_shader_module(ctx.get(),
+                                                                     "assets/shaders/present.vert.glsl",
+                                                                     shaderc_vertex_shader);
+    const VkShaderModule present_frag = Shader::create_shader_module(ctx.get(),
+                                                                     "assets/shaders/present.frag.glsl",
+                                                                     shaderc_fragment_shader);
+
+    // off-screen render target
+    TextureDesc color_tex_desc{};
+    color_tex_desc.dimension_ = {kWidth, kHeight};
+    color_tex_desc.mip_levels_ = 1;
+    color_tex_desc.array_layers_ = 1;
+    color_tex_desc.aspect_ = VK_IMAGE_ASPECT_COLOR_BIT;
+    color_tex_desc.format_ = VK_FORMAT_R16G16B16A16_SFLOAT;
+    color_tex_desc.tiling_ = VK_IMAGE_TILING_OPTIMAL;
+    color_tex_desc.usage_ = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                            VK_IMAGE_USAGE_SAMPLED_BIT |
+                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    color_tex_desc.prefer_dedicated_alloc_ = true;
+    auto offscreen_color = ctx->create_texture(color_tex_desc);
+
+    // MSAA
+    TextureDesc msaa_color_desc = color_tex_desc;
+    msaa_color_desc.usage_ = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    msaa_color_desc.samples_ = kMsaaSamples;
+    auto msaa_color = ctx->create_texture(msaa_color_desc);
 
     // create depth texture
     TextureDesc depth_tex_desc{};
@@ -180,6 +212,7 @@ int main(int argc, char *argv[]) {
     depth_tex_desc.tiling_ = VK_IMAGE_TILING_OPTIMAL;
     depth_tex_desc.usage_ = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     depth_tex_desc.prefer_dedicated_alloc_ = true;
+    depth_tex_desc.samples_ = kMsaaSamples;
     auto depth_texture = ctx->create_texture(depth_tex_desc);
 
     // create pipeline layout
@@ -207,29 +240,48 @@ int main(int argc, char *argv[]) {
     pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipeline_builder.set_viewport(1, 1, true);
     pipeline_builder.set_rasterization(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-    pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
+    pipeline_builder.set_multisampling(kMsaaSamples);
     pipeline_builder.set_depth_stencil(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
     pipeline_builder.set_color_blend(1, 0xF);
     VkPipeline pipeline = pipeline_builder.build(ctx.get(),
                                                  pipeline_layout,
-                                                 {ctx->get_swap_chain().get_format()},
+                                                 {offscreen_color->format_},
                                                  depth_texture->format_);
 
     // create skybox pipeline
-    PipelineBuilder proc_pipeline_builder{};
-    proc_pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, proc_vert_shader);
-    proc_pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, proc_frag_shader);
-    proc_pipeline_builder.set_vertex_layout({}, {});
-    proc_pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    proc_pipeline_builder.set_viewport(1, 1, true);
-    proc_pipeline_builder.set_rasterization(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-    proc_pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
-    proc_pipeline_builder.set_depth_stencil(true, false, VK_COMPARE_OP_LESS_OR_EQUAL);
-    proc_pipeline_builder.set_color_blend(1, 0xF);
-    VkPipeline proc_pipeline = proc_pipeline_builder.build(ctx.get(),
-                                                           pipeline_layout,
-                                                           {ctx->get_swap_chain().get_format()},
-                                                           depth_texture->format_);
+    PipelineBuilder sky_pipeline_builder{};
+    sky_pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, sky_vert_shader);
+    sky_pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, sky_frag_shader);
+    sky_pipeline_builder.set_vertex_layout({}, {});
+    sky_pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    sky_pipeline_builder.set_viewport(1, 1, true);
+    sky_pipeline_builder.set_rasterization(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    sky_pipeline_builder.set_multisampling(kMsaaSamples);
+    sky_pipeline_builder.set_depth_stencil(true, false, VK_COMPARE_OP_LESS_OR_EQUAL);
+    sky_pipeline_builder.set_color_blend(1, 0xF);
+    VkPipeline sky_pipeline = sky_pipeline_builder.build(ctx.get(),
+                                                         pipeline_layout,
+                                                         {offscreen_color->format_},
+                                                         depth_texture->format_);
+
+    // present pipeline
+    PipelineLayoutBuilder present_layout_desc{};
+    present_layout_desc.add_descriptor_set_layout(ctx->get_texture_registry().get_layout());
+    present_layout_desc.add_push_constant(VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PresentPushConstant));
+    const PipelineLayout present_pipeline_layout = present_layout_desc.build(ctx.get());
+
+    PipelineBuilder present_pipeline_builder{};
+    present_pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, present_vert);
+    present_pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, present_frag);
+    present_pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    present_pipeline_builder.set_viewport(1, 1, true);
+    present_pipeline_builder.set_rasterization(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    present_pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
+    present_pipeline_builder.set_color_blend(1, 0xF);
+    const VkPipeline present_pipeline = present_pipeline_builder.build(ctx.get(),
+                                                                       present_pipeline_layout,
+                                                                       {ctx->get_swap_chain().get_format()},
+                                                                       VK_FORMAT_UNDEFINED);
 
     // loop setup
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -237,7 +289,7 @@ int main(int argc, char *argv[]) {
 
     // camera
     Camera camera{};
-    camera.position_ = glm::vec3(0.0f, 0.0f, 10.0f);
+    camera.position_ = glm::vec3(0.0f, 3.0f, 10.0f);
     camera.update();
 
     // super loop
@@ -279,19 +331,21 @@ int main(int argc, char *argv[]) {
         ctx->acquire_command_buffer();
         {
             // skybox
-            ShaderData proc_shader_data{};
-            proc_shader_data.projection_ = shader_data.projection_;
-            proc_shader_data.view_ = shader_data.view_;
-            proc_shader_data.bindless_cube_ = sky_tex->bindless_index_;
-            proc_uniform_buffer.update(&proc_shader_data);
+            ShaderData sky_shader_data{};
+            sky_shader_data.projection_ = shader_data.projection_;
+            sky_shader_data.view_ = shader_data.view_;
+            sky_shader_data.bindless_cube_ = sky_tex->bindless_index_;
+            sky_uniform_buffer.update(&sky_shader_data);
 
-            // attachments
+            // 1st Pass
             Attachment scene_pass{};
             scene_pass.add_color(
                 VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                 VK_ATTACHMENT_LOAD_OP_CLEAR,
-                VK_ATTACHMENT_STORE_OP_STORE,
-                {0.0f, 0.0f, 0.0f, 1.0f}
+                VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                {0.0f, 0.0f, 0.0f, 1.0f},
+                VK_RESOLVE_MODE_AVERAGE_BIT,
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
             );
             scene_pass.set_depth(
                 VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -301,14 +355,14 @@ int main(int argc, char *argv[]) {
 
             FrameBuffer frame_buffer{};
             frame_buffer.depth_image_ = depth_texture.get();
-            frame_buffer.color_images_[0] = ctx->get_current_swap_chain_image();
+            frame_buffer.color_images_[0] = msaa_color.get();
+            frame_buffer.resolve_images_[0] = offscreen_color.get();
 
             ctx->begin_rendering(scene_pass, frame_buffer);
             {
-                // draw procedural box
-                ctx->bind_pipeline(proc_pipeline);
+                ctx->bind_pipeline(sky_pipeline);
                 ctx->bind_descriptor_set(pipeline_layout, ctx->get_texture_registry().get_set());
-                PushConstant proc_pc{.data_address_ = proc_uniform_buffer.address()};
+                PushConstant proc_pc{.data_address_ = sky_uniform_buffer.address()};
                 ctx->cmd_push_constants(pipeline_layout, &proc_pc);
                 ctx->draw(36);
 
@@ -351,6 +405,27 @@ int main(int argc, char *argv[]) {
                 }
             }
             ctx->end_rendering();
+
+            // 2nd Pass
+            Attachment present_pass{};
+            present_pass.add_color(
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                VK_ATTACHMENT_STORE_OP_STORE,
+                {0.0f, 0.0f, 0.0f, 1.0f});
+
+            FrameBuffer present_frame_buffer{};
+            present_frame_buffer.color_images_[0] = ctx->get_current_swap_chain_image();
+
+            ctx->begin_rendering(present_pass, present_frame_buffer);
+            {
+                ctx->bind_pipeline(present_pipeline);
+                ctx->bind_descriptor_set(present_pipeline_layout, ctx->get_texture_registry().get_set());
+                PresentPushConstant pc{.color_ = offscreen_color->bindless_index_};
+                ctx->cmd_push_constants(present_pipeline_layout, &pc);
+                ctx->draw(3);
+            }
+            ctx->end_rendering();
         }
         ctx->submit();
 
@@ -360,6 +435,14 @@ int main(int argc, char *argv[]) {
             ctx->destroy_image(depth_texture.get());
             depth_tex_desc.dimension_ = ctx->get_window_size();
             depth_texture = ctx->create_texture(depth_tex_desc);
+            // recreate color texture
+            ctx->destroy_image(offscreen_color.get());
+            color_tex_desc.dimension_ = ctx->get_window_size();
+            offscreen_color = ctx->create_texture(color_tex_desc);
+            // recreate msaa texture
+            ctx->destroy_image(msaa_color.get());
+            msaa_color_desc.dimension_ = ctx->get_window_size();
+            msaa_color = ctx->create_texture(msaa_color_desc);
         }
     }
 
@@ -371,20 +454,26 @@ int main(int argc, char *argv[]) {
         index_buffers.at(i).destroy();
     }
     uniform_buffer.destroy();
-    proc_uniform_buffer.destroy();
+    sky_uniform_buffer.destroy();
     ctx->destroy_pipeline_layout(pipeline_layout);
     ctx->destroy_pipeline(pipeline);
-    ctx->destroy_pipeline(proc_pipeline);
+    ctx->destroy_pipeline(sky_pipeline);
+    ctx->destroy_pipeline_layout(present_pipeline_layout);
+    ctx->destroy_pipeline(present_pipeline);
     ctx->destory_shader(vert_shader);
     ctx->destory_shader(frag_shader);
-    ctx->destory_shader(proc_vert_shader);
-    ctx->destory_shader(proc_frag_shader);
+    ctx->destory_shader(sky_vert_shader);
+    ctx->destory_shader(sky_frag_shader);
+    ctx->destory_shader(present_vert);
+    ctx->destory_shader(present_frag);
     ctx->destroy_image(depth_texture.get());
-    tank_model.destroy_textures();
     ctx->destroy_image(sky_tex.get());
     ctx->destroy_image(white_color.get());
     ctx->destroy_image(flat_normal.get());
     ctx->destroy_image(black_tex.get());
+    ctx->destroy_image(offscreen_color.get());
+    ctx->destroy_image(msaa_color.get());
+    tank_model.destroy_textures();
     // destroy window, instance and device
     ctx->destroy();
 
