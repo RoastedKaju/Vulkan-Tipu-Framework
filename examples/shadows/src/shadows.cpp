@@ -1,4 +1,5 @@
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include "utils.h"
@@ -10,13 +11,16 @@
 
 constexpr uint32_t kWidth = 1280u;
 constexpr uint32_t kHeight = 720u;
+constexpr uint32_t kShadowMapSize = 2048u;
 
-static auto light_direction_ = glm::vec3(0.0f, 10.0f, 10.0f);
+static auto light_direction_ = glm::vec3(15.0f, -100.0f, 10.0f);
 
 struct ShaderData {
     glm::mat4 projection_;
     glm::mat4 view_;
+    glm::mat4 light_space_matrix_;
     glm::vec3 light_direction_;
+    uint32_t shadow_map_index_;
 };
 
 struct alignas(16) PushConstant {
@@ -24,6 +28,36 @@ struct alignas(16) PushConstant {
     VkDeviceAddress data_address_;
     uint32_t bindless_albedo_;
 };
+
+struct alignas(16) ShadowPushConstant {
+    glm::mat4 mvp_;
+    uint32_t bindless_albedo_;
+};
+
+// The scene's model transform.
+glm::mat4 get_mesh_transform() {
+    auto transform = glm::mat4(1.0f);
+    transform = glm::translate(transform, glm::vec3(0.0f, 0.0f, 0.0f));
+    transform = glm::rotate(transform, glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    transform = glm::rotate(transform, glm::radians(0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    transform = glm::rotate(transform, glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    transform = glm::scale(transform, glm::vec3(0.25f, 0.25f, 0.25f));
+    return transform;
+}
+
+// orthographic frustum.
+glm::mat4 compute_light_space_matrix(const glm::vec3 &light_dir, const glm::vec3 &center, const float radius) {
+    const glm::vec3 dir = glm::normalize(light_dir);
+    const glm::vec3 light_pos = center - dir * radius * 2.0f;
+    // Avoid a degenerate lookAt when the light is nearly parallel to world-up.
+    const glm::vec3 up = (std::abs(dir.y) > 0.99f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+
+    const glm::mat4 light_view = glm::lookAt(light_pos, center, up);
+    glm::mat4 light_proj = glm::ortho(-radius, radius, -radius, radius, 0.1f, radius * 4.0f);
+    light_proj[1][1] *= -1.0f; // Y-flip
+
+    return light_proj * light_view;
+}
 
 struct Camera {
     glm::vec3 position_ = glm::vec3(0.0f, 0.0f, 10.0f);
@@ -118,6 +152,21 @@ int main(int argc, char *argv[]) {
         index_buffers.back().update(sponza_meshes_data.back().indices_.data());
     }
 
+    // world-space bounds
+    const glm::mat4 mesh_transform = get_mesh_transform();
+    glm::vec3 scene_min(std::numeric_limits<float>::max());
+    glm::vec3 scene_max(std::numeric_limits<float>::lowest());
+    for (const auto &mesh_data: sponza_meshes_data) {
+        for (const auto &vertex: mesh_data.vertices_) {
+            const glm::vec3 world_pos = glm::vec3(mesh_transform * glm::vec4(vertex.position_, 1.0f));
+            scene_min = glm::min(scene_min, world_pos);
+            scene_max = glm::max(scene_max, world_pos);
+        }
+    }
+    const glm::vec3 scene_center = (scene_min + scene_max) * 0.5f;
+    float scene_radius = glm::length(scene_max - scene_min) * 0.5f * 1.1f;
+    scene_radius *= 0.25f;
+
     // default textures
     std::unique_ptr<Image> white_color = ctx->create_solid_texture(glm::u8vec4(255, 255, 255, 255),
                                                                    VK_FORMAT_R8G8B8A8_SRGB);
@@ -141,6 +190,11 @@ int main(int argc, char *argv[]) {
                                                                     shaderc_vertex_shader);
     const VkShaderModule frag_shader = Shader::create_shader_module(ctx.get(), "assets/shaders/shadows.frag.glsl",
                                                                     shaderc_fragment_shader);
+    const VkShaderModule shadow_vert_shader = Shader::create_shader_module(
+        ctx.get(), "assets/shaders/depth.vert.glsl", shaderc_vertex_shader);
+    const VkShaderModule shadow_frag_shader = Shader::create_shader_module(
+        ctx.get(), "assets/shaders/depth.frag.glsl", shaderc_fragment_shader);
+
     // create depth texture
     TextureDesc depth_tex_desc{};
     depth_tex_desc.dimension_ = {kWidth, kHeight};
@@ -156,6 +210,18 @@ int main(int argc, char *argv[]) {
     auto depth_texture = ctx->create_texture(depth_tex_desc);
 
     // create shadow texture
+    TextureDesc shadow_tex_desc{};
+    shadow_tex_desc.dimension_ = {kShadowMapSize, kShadowMapSize};
+    shadow_tex_desc.mip_levels_ = 1;
+    shadow_tex_desc.aspect_ = VK_IMAGE_ASPECT_DEPTH_BIT;
+    shadow_tex_desc.array_layers_ = 1;
+    shadow_tex_desc.depth_ = 1;
+    shadow_tex_desc.format_ = VK_FORMAT_D32_SFLOAT;
+    shadow_tex_desc.tiling_ = VK_IMAGE_TILING_OPTIMAL;
+    shadow_tex_desc.usage_ = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    shadow_tex_desc.prefer_dedicated_alloc_ = true;
+    shadow_tex_desc.samples_ = VK_SAMPLE_COUNT_1_BIT;
+    auto shadow_texture = ctx->create_texture(shadow_tex_desc);
 
     // pipeline layout
     PipelineLayoutBuilder pipeline_layout_desc{};
@@ -189,6 +255,28 @@ int main(int argc, char *argv[]) {
                                                  pipeline_layout,
                                                  {ctx->get_swap_chain().get_format()},
                                                  depth_texture->format_);
+
+    // shadow depth pass
+    PipelineLayoutBuilder shadow_pipeline_layout_desc{};
+    shadow_pipeline_layout_desc.add_descriptor_set_layout(ctx->get_texture_registry().get_layout());
+    shadow_pipeline_layout_desc.add_push_constant(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                                  sizeof(ShadowPushConstant));
+    const PipelineLayout shadow_pipeline_layout = shadow_pipeline_layout_desc.build(ctx.get());
+
+    PipelineBuilder shadow_pipeline_builder{};
+    shadow_pipeline_builder.add_shader(VK_SHADER_STAGE_VERTEX_BIT, shadow_vert_shader);
+    shadow_pipeline_builder.add_shader(VK_SHADER_STAGE_FRAGMENT_BIT, shadow_frag_shader);
+    shadow_pipeline_builder.set_vertex_layout(vertex_binding, vertex_attributes);
+    shadow_pipeline_builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    shadow_pipeline_builder.set_viewport(1, 1, true);
+    shadow_pipeline_builder.set_rasterization(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    shadow_pipeline_builder.set_multisampling(VK_SAMPLE_COUNT_1_BIT);
+    shadow_pipeline_builder.set_depth_stencil(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
+    shadow_pipeline_builder.set_color_blend(0, 0);
+    VkPipeline shadow_pipeline = shadow_pipeline_builder.build(ctx.get(),
+                                                               shadow_pipeline_layout,
+                                                               {}, // no color attachments, depth-only pass
+                                                               shadow_texture->format_);
 
     // loop setup
     uint64_t last_time = SDL_GetPerformanceCounter();
@@ -230,10 +318,47 @@ int main(int argc, char *argv[]) {
         shader_data.view_ = camera.get_view_matrix();
         shader_data.light_direction_ = glm::normalize(light_direction_);
 
+        const glm::mat4 light_space_matrix = compute_light_space_matrix(light_direction_, scene_center, scene_radius);
+        shader_data.light_space_matrix_ = light_space_matrix;
+        shader_data.shadow_map_index_ = shadow_texture->bindless_index_;
+
         [[maybe_unused]] auto time = static_cast<float>(SDL_GetTicks()) / 1000.0f;
 
         ctx->acquire_command_buffer();
         {
+            // shadow depth pass from light's POV
+            Attachment shadow_pass{};
+            shadow_pass.set_depth(
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_ATTACHMENT_STORE_OP_STORE
+            );
+
+            FrameBuffer shadow_frame_buffer{};
+            shadow_frame_buffer.depth_image_ = shadow_texture.get();
+
+            ctx->begin_rendering(shadow_pass, shadow_frame_buffer);
+            {
+                ctx->bind_descriptor_set(shadow_pipeline_layout, ctx->get_texture_registry().get_set());
+                ctx->bind_pipeline(shadow_pipeline);
+                for (auto i = 0; i < sponza_model.meshes().size(); ++i) {
+                    const auto &mat = sponza_model.meshes().at(i).material();
+
+                    ShadowPushConstant spc{};
+                    spc.mvp_ = light_space_matrix * mesh_transform;
+                    spc.bindless_albedo_ = mat->base_color_
+                                               ? mat->base_color_->image_->bindless_index_
+                                               : white_color->bindless_index_;
+
+                    ctx->bind_vertex_buffer(vert_buffers.at(i).get());
+                    ctx->bind_index_buffer(index_buffers.at(i).get());
+                    ctx->cmd_push_constants(shadow_pipeline_layout, &spc);
+                    ctx->draw_indexed(sponza_meshes_data.at(i).indices_.size());
+                }
+            }
+            ctx->end_rendering();
+
+            // main scene pass
             Attachment scene_pass{};
             scene_pass.add_color(
                 VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -261,12 +386,7 @@ int main(int argc, char *argv[]) {
                     pc.data_address_ = uniform_buffer.address();
                     const auto &mat = sponza_model.meshes().at(i).material();
 
-                    auto transform = glm::mat4(1.0f);
-                    transform = glm::translate(transform, glm::vec3(0.0f, 0.0f, 0.0f));
-                    transform = glm::rotate(transform, glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                    transform = glm::rotate(transform, glm::radians(0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                    transform = glm::scale(transform, glm::vec3(0.25f, 0.25f, 0.25f));
-                    pc.model_ = transform;
+                    pc.model_ = mesh_transform;
                     // color texture
                     pc.bindless_albedo_ = mat->base_color_
                                               ? mat->base_color_->image_->bindless_index_
@@ -307,6 +427,11 @@ int main(int argc, char *argv[]) {
     ctx->destroy_pipeline(pipeline);
     ctx->destory_shader(vert_shader);
     ctx->destory_shader(frag_shader);
+    ctx->destroy_pipeline_layout(shadow_pipeline_layout);
+    ctx->destroy_pipeline(shadow_pipeline);
+    ctx->destory_shader(shadow_vert_shader);
+    ctx->destory_shader(shadow_frag_shader);
+    ctx->destroy_image(shadow_texture.get());
     ctx->destroy_image(depth_texture.get());
     ctx->destroy_image(white_color.get());
     ctx->destroy_image(flat_normal.get());

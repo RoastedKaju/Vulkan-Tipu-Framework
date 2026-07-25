@@ -158,6 +158,10 @@ PipelineBuilder &PipelineBuilder::set_rasterization(const VkCullModeFlags cull,
         .frontFace = front,
         .lineWidth = 1.0f
     };
+    // TODO: Expose this for users to set
+    rasterization_state_.depthBiasEnable = VK_TRUE;
+    rasterization_state_.depthBiasConstantFactor = 1.25f;
+    rasterization_state_.depthBiasSlopeFactor = 1.75f;
     return *this;
 }
 

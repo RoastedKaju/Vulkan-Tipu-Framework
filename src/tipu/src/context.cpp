@@ -162,6 +162,7 @@ bool Context::setup_device(const uint32_t device_index) {
     VkPhysicalDeviceVulkan13Features enabled_features_13{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .pNext = &enabled_features_12,
+        .shaderDemoteToHelperInvocation = true,
         .synchronization2 = true,
         .dynamicRendering = true
     };
@@ -1179,7 +1180,7 @@ void Context::blit_image(const VkCommandBuffer cmd, const Image &src, const Imag
 
 void Context::create_default_sampler() {
     // Sampler
-    constexpr VkSamplerCreateInfo create_info{
+    VkSamplerCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .magFilter = VK_FILTER_LINEAR,
         .minFilter = VK_FILTER_LINEAR,
@@ -1192,5 +1193,6 @@ void Context::create_default_sampler() {
         .minLod = 0.0f,
         .maxLod = VK_LOD_CLAMP_NONE
     };
+
     check(vkCreateSampler(device_, &create_info, nullptr, &default_sampler_));
 }
