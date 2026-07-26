@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
     }
     const glm::vec3 scene_center = (scene_min + scene_max) * 0.5f;
     float scene_radius = glm::length(scene_max - scene_min) * 0.5f * 1.1f;
-    scene_radius *= 0.25f;
+    scene_radius *= 0.65f;
 
     // default textures
     std::unique_ptr<Image> white_color = ctx->create_solid_texture(glm::u8vec4(255, 255, 255, 255),

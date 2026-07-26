@@ -9,6 +9,9 @@ attachments.
 <p align="center">
 <b>**Work In Progress**</b>
 </p>
+<p align="center">
+<img src="docs/ShadowMapExample.jpg" alt="Header"/>
+</p>
   
 ---
 
