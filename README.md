@@ -51,40 +51,34 @@ attachments.
 <b>Animation</b>
 </p>
 <p align="center">
-<img src="docs/Animator.gif" alt="Animation"/>
+<img src="docs/Animator.gif" alt="Animation" width="520" height="300"/>
 </p>
 
 <p align="center">
 <b>PBR</b>
 </p>
 <p align="center">
-<img src="docs/PBRExample.jpg" alt="PBR"/>
+<img src="docs/PBRExample.jpg" alt="PBR" width="520" height="300"/>
 </p>
 
 <p align="center">
 <b>Multi-Mesh Import</b>
 </p>
 <p align="center">
-<img src="docs/TankExample.jpg" alt="Tank"/>
+<img src="docs/TankExample.jpg" alt="Tank" width="520" height="300"/>
 </p>
 
 <p align="center">
 <b>Wireframe</b>
 </p>
 <p align="center">
-<img src="docs/WireframeExample.jpg" alt="Toy"/>
+<img src="docs/WireframeExample.jpg" alt="Toy" width="520" height="300"/>
 </p>
 
 <p align="center">
 <b>ImGui</b>
 </p>
 <p align="center">
-<img src="docs/ImGuiExample.jpg" alt="UI"/>
+<img src="docs/ImGuiExample.jpg" alt="UI" width="520" height="300"/>
 </p>
 
-<p align="center">
-<b>Cubemap</b>
-</p>
-<p align="center">
-<img src="docs/CubemapExample.jpg" alt="Cubemap"/>
-</p>
