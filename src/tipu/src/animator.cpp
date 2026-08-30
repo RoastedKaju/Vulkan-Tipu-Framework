@@ -17,6 +17,21 @@ void Animator::update(const double dt) {
     calculate_bone_transform(skeleton.nodes_.at(skeleton.root_), glm::mat4(1.0f));
 }
 
+void Animator::stop() {
+    model_ = nullptr;
+    current_clip_ = nullptr;
+    bone_matrices_.assign(kMaxBones, glm::mat4(1.0f));
+}
+
+void Animator::bind_pose(const Model *model) {
+    model_ = model;
+    current_clip_ = nullptr;
+    bone_matrices_.assign(kMaxBones, glm::mat4(1.0f));
+
+    const Skeleton &skeleton = model_->skeleton();
+    calculate_bind_pose(skeleton.nodes_.at(skeleton.root_), glm::mat4(1.0f));
+}
+
 void Animator::calculate_bone_transform(const SkeletonNode &node, const glm::mat4 &parent_transform) {
     const Skeleton &skeleton = model_->skeleton();
 
@@ -42,6 +57,20 @@ void Animator::calculate_bone_transform(const SkeletonNode &node, const glm::mat
 
     for (const int child_index: node.children_) {
         calculate_bone_transform(skeleton.nodes_.at(child_index), global_transform);
+    }
+}
+
+void Animator::calculate_bind_pose(const SkeletonNode &node, const glm::mat4 &parent_transform) {
+    const Skeleton &skeleton = model_->skeleton();
+    const glm::mat4 global_transform = parent_transform * node.local_transform_;
+
+    if (const auto it = skeleton.bone_info_map_.find(node.name_); it != skeleton.bone_info_map_.end()) {
+        const int bone_id = it->second.id_;
+        bone_matrices_[bone_id] = skeleton.global_inverse_transform_ * global_transform * it->second.offset_;
+    }
+
+    for (const int child_index : node.children_) {
+        calculate_bind_pose(skeleton.nodes_.at(child_index), global_transform);
     }
 }
 

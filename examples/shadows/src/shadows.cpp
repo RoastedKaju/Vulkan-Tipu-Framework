@@ -280,6 +280,7 @@ int main(int argc, char *argv[]) {
 
     // loop setup
     uint64_t last_time = SDL_GetPerformanceCounter();
+    Uint64 freq = SDL_GetPerformanceFrequency();
     bool quit = false;
 
     // camera
@@ -291,7 +292,10 @@ int main(int argc, char *argv[]) {
         Uint64 current_time = SDL_GetPerformanceCounter();
         [[maybe_unused]] double delta_time = static_cast<double>(current_time - last_time) /
                                              static_cast<double>(SDL_GetPerformanceFrequency());
+        double fps = 1.0 / delta_time;
         last_time = current_time;
+
+        // std::cout << fps << std::endl;
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {

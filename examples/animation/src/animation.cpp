@@ -43,6 +43,9 @@ int main(int argc, char *argv[]) {
     if (astronaut_model.is_skeletal_mesh() && !astronaut_model.animations().empty()) {
         animator.play(&astronaut_model, 0);
     }
+    else if (astronaut_model.is_skeletal_mesh()) {
+        animator.bind_pose(&astronaut_model);
+    }
 
     std::vector<MeshData> meshes_data;
     std::vector<Buffer> vert_buffers;
@@ -90,6 +93,7 @@ int main(int argc, char *argv[]) {
     };
     Buffer uniform_buffer{};
     uniform_buffer.create(u_buf_desc);
+
     BufferDesc bone_buf_desc{
         .context = ctx.get(),
         .usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,

@@ -10,14 +10,22 @@ constexpr uint32_t kMaxBones = 128;
 
 class Animator {
 public:
+    Animator() : bone_matrices_(kMaxBones, glm::mat4(1.0f)) {}
+
     void play(const Model *model, int clip_index = 0);
 
     void update(double dt);
+
+    void stop();
+
+    void bind_pose(const Model *model);
 
     const std::vector<glm::mat4> &bone_matrices() const { return bone_matrices_; }
 
 private:
     void calculate_bone_transform(const SkeletonNode &node, const glm::mat4 &parent_transform);
+
+    void calculate_bind_pose(const SkeletonNode &node, const glm::mat4 &parent_transform);
 
     glm::vec3 interpolate_position(const NodeAnimation &channel, double time) const;
 
