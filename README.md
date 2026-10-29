@@ -7,9 +7,6 @@ You can load and display models in less than 200 lines of code with this, chain 
 attachments.
 
 <p align="center">
-<b>**Work In Progress**</b>
-</p>
-<p align="center">
 <img src="docs/ShadowMapExample.jpg" alt="Header"/>
 </p>
   
